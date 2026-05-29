@@ -1,12 +1,7 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { fetchSettings, saveSettings, DEFAULT_SETTINGS, type Settings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 
-/**
- * Reactive settings, backed by user_settings table.
- * Returns DEFAULT_SETTINGS during initial load (avoids flicker).
- * Subscribes to realtime changes for cross-device sync.
- */
 export function useSettings(): [Settings, (next: Settings) => Promise<void>] {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
 
@@ -36,7 +31,7 @@ export function useSettings(): [Settings, (next: Settings) => Promise<void>] {
   }, [])
 
   const update = async (next: Settings) => {
-    setSettings(next) // optimistic
+    setSettings(next)
     await saveSettings(next)
   }
 

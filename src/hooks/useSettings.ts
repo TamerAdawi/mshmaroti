@@ -19,7 +19,7 @@ export function useSettings(): [Settings, (next: Settings) => Promise<void>] {
     }
     void load()
 
-  const channelName = `settings-changes-${Math.random().toString(36).slice(2)}`
+    const channelName = `settings-changes-${Math.random().toString(36).slice(2)}`
     const channel = supabase
       .channel(channelName)
       .on(

@@ -29,7 +29,7 @@ export function useAllShifts(): Shift[] | undefined {
 
     // Realtime: any change to a shift row for any user triggers a refetch.
     // RLS still ensures we only get our own rows back.
-   const channelName = `shifts-changes-${Math.random().toString(36).slice(2)}`
+    const channelName = `shifts-changes-${Math.random().toString(36).slice(2)}`
     const channel = supabase
       .channel(channelName)
       .on(

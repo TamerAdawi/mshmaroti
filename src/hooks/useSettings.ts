@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { fetchSettings, saveSettings, DEFAULT_SETTINGS, type Settings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 
@@ -37,3 +37,4 @@ export function useSettings(): [Settings, (next: Settings) => Promise<void>] {
 
   return [settings, update]
 }
+

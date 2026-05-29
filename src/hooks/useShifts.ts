@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllShifts } from '../lib/api'
 import type { JobType, Shift } from '../types'
@@ -58,3 +58,4 @@ export function useFilteredShifts(filter: JobType | 'all'): Shift[] | undefined 
     return all.filter((s) => s.jobType === filter)
   }, [all, filter])
 }
+

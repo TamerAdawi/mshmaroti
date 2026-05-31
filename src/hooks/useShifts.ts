@@ -3,6 +3,11 @@ import { supabase } from '../lib/supabase'
 import { fetchAllShifts } from '../lib/api'
 import type { JobType, Shift } from '../types'
 
+/**
+ * All shifts for the current user, newest first.
+ * Subscribes to realtime changes so any insert/update/delete refreshes the list.
+ * Returns undefined while loading.
+ */
 export function useAllShifts(): Shift[] | undefined {
   const [shifts, setShifts] = useState<Shift[] | undefined>(undefined)
 
@@ -22,6 +27,8 @@ export function useAllShifts(): Shift[] | undefined {
 
     void refresh()
 
+    // Realtime: any change to a shift row for any user triggers a refetch.
+    // RLS still ensures we only get our own rows back.
     const channelName = `shifts-changes-${Math.random().toString(36).slice(2)}`
     const channel = supabase
       .channel(channelName)
@@ -29,6 +36,7 @@ export function useAllShifts(): Shift[] | undefined {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'shifts' },
         () => {
+          // Debounce: many rapid changes only trigger one refetch
           if (timeoutId) clearTimeout(timeoutId)
           timeoutId = setTimeout(() => void refresh(), 100)
         },
@@ -45,11 +53,13 @@ export function useAllShifts(): Shift[] | undefined {
   return shifts
 }
 
+/** Recent shifts — derived from useAllShifts */
 export function useRecentShifts(limit = 5): Shift[] | undefined {
   const all = useAllShifts()
   return useMemo(() => (all ? all.slice(0, limit) : undefined), [all, limit])
 }
 
+/** Filtered by job — derived from useAllShifts */
 export function useFilteredShifts(filter: JobType | 'all'): Shift[] | undefined {
   const all = useAllShifts()
   return useMemo(() => {
@@ -58,4 +68,3 @@ export function useFilteredShifts(filter: JobType | 'all'): Shift[] | undefined 
     return all.filter((s) => s.jobType === filter)
   }, [all, filter])
 }
-

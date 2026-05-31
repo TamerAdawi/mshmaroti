@@ -17,8 +17,10 @@ export interface Shift {
   tips: number
   /** Out-of-pocket expenses (food, transport, etc.) — tracked separately, not deducted from total */
   expenses: number
-  /** base + tips — denormalized for fast sorting/filtering. Does NOT include expenses. */
+  /** base + tips for wedding, max(base, tips) for hourly — denormalized for fast sorting/filtering. */
   total: number
+  /** Optional per-shift rate multiplier (default 1.0). When != 1.0, overrides OT and rest day calcs. */
+  rateMultiplier?: number
   notes?: string
   /** ms epoch — for stable ordering when multiple shifts share a date */
   createdAt: number

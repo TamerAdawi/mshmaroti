@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { addShift, updateShift } from '../lib/api'
 import type { JobType, Shift } from '../types'
 import { t } from '../strings'
-import { cn, fmtIls, hoursBetween, todayIso } from '../lib/utils'
+import { cn, fmtIls, fmtHours, hoursBetween, todayIso } from '../lib/utils'
 import { useSettings } from '../hooks/useSettings'
 import { calcShiftPay } from '../lib/payroll'
 
@@ -25,9 +25,17 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
   const [hoursInput, setHoursInput] = useState(editing ? String(editing.hours) : '')
   const [tipsInput, setTipsInput] = useState(editing ? String(editing.tips) : '')
   const [expensesInput, setExpensesInput] = useState(editing && (editing.expenses ?? 0) > 0 ? String(editing.expenses) : '')
+  const [multiplierInput, setMultiplierInput] = useState(
+    editing?.rateMultiplier && editing.rateMultiplier !== 1.0 ? String(editing.rateMultiplier) : '1'
+  )
   const [notes, setNotes] = useState(editing?.notes ?? '')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // Force time mode when hourly — required for accurate rest day window calc
+  useEffect(() => {
+    if (jobType === 'hourly' && mode === 'hours') setMode('time')
+  }, [jobType, mode])
 
   const computedHours = useMemo(() => {
     if (mode === 'time') return hoursBetween(startTime, endTime)
@@ -40,20 +48,10 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
     return startTime && endTime && endTime <= startTime
   }, [mode, startTime, endTime])
 
-  /** Payroll breakdown for restaurant shifts (null for wedding). */
-  const breakdown = useMemo(() => {
-    if (jobType !== 'hourly' || !computedHours || computedHours <= 0) return null
-    return calcShiftPay(
-      { date, jobType: 'hourly', hours: computedHours },
-      settings.hourlyRate,
-      settings,
-    )
-  }, [jobType, computedHours, date, settings])
-
-  const base = useMemo(() => {
-    if (jobType === 'wedding') return settings.weddingRate
-    return breakdown?.gross ?? 0
-  }, [jobType, breakdown, settings])
+  const rateMultiplier = useMemo(() => {
+    const n = Number(multiplierInput)
+    return Number.isFinite(n) && n > 0 ? n : 1.0
+  }, [multiplierInput])
 
   const tips = useMemo(() => {
     const n = Number(tipsInput)
@@ -65,9 +63,39 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
     return Number.isFinite(n) && n >= 0 ? n : 0
   }, [expensesInput])
 
-  const total = base + tips
+  /** Payroll breakdown for restaurant shifts (null for wedding). */
+  const breakdown = useMemo(() => {
+    if (jobType !== 'hourly' || !computedHours || computedHours <= 0) return null
+    return calcShiftPay(
+      {
+        date,
+        jobType: 'hourly',
+        hours: computedHours,
+        startTime: mode === 'time' ? startTime : undefined,
+        endTime: mode === 'time' ? endTime : undefined,
+        tips,
+        rateMultiplier,
+      },
+      settings.hourlyRate,
+      settings,
+    )
+  }, [jobType, computedHours, date, startTime, endTime, mode, tips, rateMultiplier, settings])
 
-  useEffect(() => setError(null), [date, jobType, mode, startTime, endTime, hoursInput, tipsInput, expensesInput])
+  // base = hourly_calc (what was earned from wages before tip comparison)
+  // For wedding: base = weddingRate (flat)
+  // For hourly: base = breakdown.hourlyCalc (what hourly math produced)
+  const base = useMemo(() => {
+    if (jobType === 'wedding') return settings.weddingRate
+    return breakdown?.hourlyCalc ?? 0
+  }, [jobType, breakdown, settings])
+
+  // total = wedding: base+tips, hourly: max(base, tips) per Israeli tip law
+  const total = useMemo(() => {
+    if (jobType === 'wedding') return base + tips
+    return breakdown?.gross ?? Math.max(base, tips)
+  }, [jobType, base, tips, breakdown])
+
+  useEffect(() => setError(null), [date, jobType, mode, startTime, endTime, hoursInput, tipsInput, expensesInput, multiplierInput])
 
   const canSubmit = computedHours !== null && computedHours > 0 && !submitting
 
@@ -87,6 +115,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
         base,
         tips,
         expenses,
+        rateMultiplier: jobType === 'hourly' ? rateMultiplier : 1.0,
         notes: notes.trim() || undefined,
         ...(mode === 'time' ? { startTime, endTime } : {}),
       }
@@ -134,8 +163,18 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
           <Field label={t.form.inputMode}>
             <div className="flex gap-1 p-1 bg-elevate rounded-xl border border-line">
               <ModeButton active={mode === 'time'} onClick={() => setMode('time')} label={t.form.modeTime} />
-              <ModeButton active={mode === 'hours'} onClick={() => setMode('hours')} label={t.form.modeHours} />
+              <ModeButton
+                active={mode === 'hours'}
+                onClick={() => jobType !== 'hourly' && setMode('hours')}
+                label={t.form.modeHours}
+                disabled={jobType === 'hourly'}
+              />
             </div>
+            {jobType === 'hourly' && (
+              <div className="text-[11px] text-muted mt-1 px-1">
+                מצב שעות זמין רק לאולם. במשרה שעתית נדרשת שעת התחלה וסיום לחישוב מדויק של יום מנוחה ושעות נוספות.
+              </div>
+            )}
           </Field>
 
           {mode === 'time' ? (
@@ -162,8 +201,14 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
 
           <Field label={t.form.tips}>
             <input type="number" inputMode="decimal" step="1" min="0" placeholder={t.form.tipsPlaceholder} value={tipsInput} onChange={(e) => setTipsInput(e.target.value)} className="input-field tabular-nums" />
-            {jobType === 'hourly' && (
-              <div className="text-[11px] text-muted mt-1 px-1">לא נכלל בחישוב הנטו (טיפים שעתי)</div>
+            {jobType === 'hourly' && tips > 0 && breakdown && (
+              <div className="text-[11px] mt-1 px-1">
+                {breakdown.tipsWon ? (
+                  <span className="text-lime-deep font-semibold">✓ טיפים גבוהים יותר — יקבעו את השכר</span>
+                ) : (
+                  <span className="text-muted">השכר השעתי גבוה יותר — הוא יקבע (חוק הטיפים)</span>
+                )}
+              </div>
             )}
           </Field>
 
@@ -172,12 +217,29 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
             <div className="text-[11px] text-muted mt-1 px-1">{t.form.expensesHint}</div>
           </Field>
 
+          {jobType === 'hourly' && (
+            <Field label="מכפיל שכר (אופציונלי)">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0.1"
+                value={multiplierInput}
+                onChange={(e) => setMultiplierInput(e.target.value)}
+                className="input-field tabular-nums"
+              />
+              <div className="text-[11px] text-muted mt-1 px-1">
+                ברירת מחדל 1.0. כשערך שונה — מבטל את חישוב יום מנוחה ושעות נוספות, ומכפיל ישירות בשכר השעתי.
+              </div>
+            </Field>
+          )}
+
           <Field label={t.form.notes}>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t.form.notesPlaceholder} rows={2} className="input-field resize-none" />
           </Field>
 
-          {/* OT / rest-day breakdown for restaurant shifts */}
-          {breakdown && (breakdown.isRestDay || breakdown.otTier1Hours > 0) && (
+          {/* Pay breakdown widget */}
+          {breakdown && (breakdown.restDayHours > 0 || breakdown.tierOt1Hours > 0 || breakdown.tierOt2Hours > 0 || breakdown.multiplierOverride || breakdown.tipsWon) && (
             <div className="rounded-xl bg-violet-soft/60 border border-violet/20 p-4 space-y-1.5">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-7 h-7 rounded-lg bg-hero-gradient flex items-center justify-center shrink-0">
@@ -187,29 +249,47 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
                   </svg>
                 </div>
                 <div className="text-xs font-semibold text-violet-deep">
-                  {breakdown.isRestDay ? 'יום מנוחה ועוד' : 'פירוט שעות נוספות'}
+                  {breakdown.multiplierOverride
+                    ? `מכפיל ${rateMultiplier}× — ללא חישוב שעות נוספות`
+                    : breakdown.restDayHours > 0
+                      ? `${fmtHours(breakdown.restDayHours)} ביום מנוחה`
+                      : 'פירוט שעות נוספות'}
                 </div>
               </div>
-              {breakdown.regularHours > 0 && (
+              {!breakdown.multiplierOverride && breakdown.restDayHours > 0 && (
                 <BreakdownRow
-                  label={`${breakdown.regularHours} ש' × ${breakdown.multipliers.regular}`}
-                  value={fmtIls(breakdown.regularHours * settings.hourlyRate * breakdown.multipliers.regular)}
-                  hint={breakdown.isRestDay ? 'יום מנוחה' : 'רגיל'}
+                  label={`${fmtHours(breakdown.restDayHours)} ביום מנוחה (×1.5+)`}
+                  value={fmtIls(breakdown.restDayHours * settings.hourlyRate * 1.5)}
+                  hint={`חלון: שבת 19:00 → ראשון 19:00`}
                 />
               )}
-              {breakdown.otTier1Hours > 0 && (
+              {!breakdown.multiplierOverride && breakdown.regularHours > 0 && (
                 <BreakdownRow
-                  label={`${breakdown.otTier1Hours} ש' × ${breakdown.multipliers.ot1}`}
-                  value={fmtIls(breakdown.otTier1Hours * settings.hourlyRate * breakdown.multipliers.ot1)}
-                  hint="שעות נוספות 125%"
+                  label={`${fmtHours(breakdown.regularHours)} מחוץ ליום מנוחה`}
+                  value={fmtIls(breakdown.regularHours * settings.hourlyRate * 1.0)}
+                  hint="רגיל × 1.0"
                 />
               )}
-              {breakdown.otTier2Hours > 0 && (
+              {!breakdown.multiplierOverride && breakdown.tierOt1Hours > 0 && (
                 <BreakdownRow
-                  label={`${breakdown.otTier2Hours} ש' × ${breakdown.multipliers.ot2}`}
-                  value={fmtIls(breakdown.otTier2Hours * settings.hourlyRate * breakdown.multipliers.ot2)}
-                  hint="שעות נוספות 150%"
+                  label={`${fmtHours(breakdown.tierOt1Hours)} שעות נוספות`}
+                  value="במכפיל ×1.25"
+                  hint="שעות 9-10"
                 />
+              )}
+              {!breakdown.multiplierOverride && breakdown.tierOt2Hours > 0 && (
+                <BreakdownRow
+                  label={`${fmtHours(breakdown.tierOt2Hours)} שעות נוספות`}
+                  value="במכפיל ×1.5"
+                  hint="שעות 11+"
+                />
+              )}
+              <div className="h-px bg-violet/15 my-1" />
+              <BreakdownRow label="חישוב שעתי" value={fmtIls(breakdown.hourlyCalc)} hint="לפני השוואה עם טיפים" />
+              {tips > 0 && breakdown.tipsWon && (
+                <div className="text-xs text-lime-deep font-bold pt-1">
+                  ★ טיפים גבוהים — השכר ייקבע לפי הטיפים
+                </div>
               )}
             </div>
           )}
@@ -265,14 +345,16 @@ function JobChip({ active, onClick, name, sub, color }: { active: boolean; onCli
   )
 }
 
-function ModeButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function ModeButton({ active, onClick, label, disabled = false }: { active: boolean; onClick: () => void; label: string; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         'flex-1 rounded-lg py-2 text-sm font-semibold transition',
         active ? 'bg-surface text-ink shadow-tile' : 'text-muted hover:text-body',
+        disabled && 'opacity-40 cursor-not-allowed hover:text-muted',
       )}
     >
       {label}

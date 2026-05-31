@@ -19,6 +19,7 @@ export function rowToShift(row: ShiftRow): Shift {
     tips: Number(row.tips),
     expenses: Number(row.expenses),
     total: Number(row.total),
+    rateMultiplier: row.rate_multiplier != null ? Number(row.rate_multiplier) : 1.0,
     notes: row.notes ?? undefined,
     createdAt: new Date(row.created_at).getTime(),
   }
@@ -47,7 +48,12 @@ async function requireUserId(): Promise<string> {
 
 export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>): Promise<number> {
   const user_id = await requireUserId()
-  const total = input.base + input.tips
+  // Total logic differs by job type:
+  //   wedding: base + tips (both kept, paid same-day cash)
+  //   hourly:  max(base, tips) per Israeli tip law — whichever is higher is what you receive
+  const total = input.jobType === 'wedding'
+    ? input.base + input.tips
+    : Math.max(input.base, input.tips)
   const { data, error } = await supabase
     .from('shifts')
     .insert({
@@ -61,6 +67,7 @@ export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>)
       tips: input.tips,
       expenses: input.expenses ?? 0,
       total,
+      rate_multiplier: input.rateMultiplier ?? 1.0,
       notes: input.notes ?? null,
     })
     .select('id')
@@ -83,23 +90,23 @@ export async function updateShift(
   if (patch.base !== undefined) updates.base = patch.base
   if (patch.tips !== undefined) updates.tips = patch.tips
   if (patch.expenses !== undefined) updates.expenses = patch.expenses
+  if (patch.rateMultiplier !== undefined) updates.rate_multiplier = patch.rateMultiplier
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null
 
-  // Recompute total — fetch existing if either base or tips was not in patch
-  if (patch.base !== undefined || patch.tips !== undefined) {
-    if (patch.base === undefined || patch.tips === undefined) {
-      const { data: existing, error: fetchErr } = await supabase
-        .from('shifts')
-        .select('base, tips')
-        .eq('id', id)
-        .single()
-      if (fetchErr) throw fetchErr
-      const newBase = patch.base ?? Number(existing.base)
-      const newTips = patch.tips ?? Number(existing.tips)
-      updates.total = newBase + newTips
-    } else {
-      updates.total = patch.base + patch.tips
-    }
+  // Recompute total when base, tips, or jobType changes
+  if (patch.base !== undefined || patch.tips !== undefined || patch.jobType !== undefined) {
+    const { data: existing, error: fetchErr } = await supabase
+      .from('shifts')
+      .select('base, tips, job_type')
+      .eq('id', id)
+      .single()
+    if (fetchErr) throw fetchErr
+    const newBase = patch.base ?? Number(existing.base)
+    const newTips = patch.tips ?? Number(existing.tips)
+    const newJobType = patch.jobType ?? existing.job_type
+    updates.total = newJobType === 'wedding'
+      ? newBase + newTips
+      : Math.max(newBase, newTips)
   }
 
   const { error } = await supabase.from('shifts').update(updates).eq('id', id)
@@ -143,6 +150,7 @@ export async function bulkImport(shifts: Shift[]): Promise<void> {
     tips: s.tips,
     expenses: s.expenses ?? 0,
     total: s.total,
+    rate_multiplier: s.rateMultiplier ?? 1.0,
     notes: s.notes ?? null,
   }))
   // Chunk to stay under any payload limits (Supabase handles up to ~1MB easily)

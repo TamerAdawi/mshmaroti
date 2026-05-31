@@ -286,15 +286,23 @@ export async function generateReport(
 
     const body = filtered.map((s) => {
       const jobName = s.jobType === 'wedding' ? settings.weddingName : settings.hourlyName
+      // Show multiplier indicator in base column when != 1.0
+      const mult = s.rateMultiplier ?? 1.0
+      const baseCell = mult !== 1.0 && s.jobType === 'hourly'
+        ? `${fmtPdfIls(s.base)} (×${mult})`
+        : fmtPdfIls(s.base)
+      // Tips winner indicator: for hourly shifts where tips > base, mark with ★
+      const tipsWon = s.jobType === 'hourly' && s.tips > s.base
+      const totalCell = tipsWon ? `${fmtPdfIls(s.total)} ★` : fmtPdfIls(s.total)
       const row: Array<string> = [
         fmtPdfDate(s.date),
         rev(jobName),
         fmtPdfHours(s.hours),
-        fmtPdfIls(s.base),
+        baseCell,
       ]
       if (options.includeTips) row.push(fmtPdfIls(s.tips))
       if (options.includeExpenses) row.push(fmtPdfIls(s.expenses ?? 0))
-      row.push(fmtPdfIls(s.total))
+      row.push(totalCell)
       if (options.includeNotes) row.push(s.notes ? rev(s.notes) : '—')
       return row
     })
@@ -321,6 +329,16 @@ export async function generateReport(
       alternateRowStyles: { fillColor: COLORS.bg },
       columnStyles: { 0: { halign: 'center' }, 1: { halign: 'right' } },
     })
+
+    // Legend if any tips-won shifts in the period
+    const hasTipsWon = filtered.some(s => s.jobType === 'hourly' && s.tips > s.base)
+    if (hasTipsWon) {
+      const tableEnd = (doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y
+      doc.setTextColor(...COLORS.muted)
+      doc.setFont('Hebrew', 'normal')
+      doc.setFontSize(7)
+      doc.text(rev('טיפים גבוהים מהחישוב השעתי - חוק שירות וטיפים') + ' = ★', pageW - marginX, tableEnd + 4, { align: 'right' })
+    }
   }
 
   // ===== FOOTER on all pages =====

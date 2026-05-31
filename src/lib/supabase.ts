@@ -22,6 +22,7 @@ export interface ShiftRow {
   tips: number
   expenses: number
   total: number
+  rate_multiplier?: number
   notes: string | null
   created_at: string
 }

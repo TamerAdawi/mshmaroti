@@ -191,7 +191,7 @@ export default function Settings() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-ink">תאמר עדוי</div>
-            <div className="text-xs text-muted">{t.appName} · גרסה 2.1.0</div>
+            <div className="text-xs text-muted">{t.appName} · גרסה 2.2.0</div>
           </div>
           <a
             href="https://www.linkedin.com/in/tamer-adawi-36a6a91a6/"

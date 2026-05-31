@@ -37,7 +37,7 @@ export default function Report() {
     includeShifts: true,
     includeTips: true,
     includeExpenses: true,
-    includeNotes: false,
+    includeNotes: true,
   })
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)

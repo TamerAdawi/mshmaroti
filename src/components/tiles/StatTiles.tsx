@@ -1,10 +1,12 @@
 import { t } from '../../strings'
 import { fmtIls, cn } from '../../lib/utils'
 import { weekAgg, monthAgg, pctDelta } from '../../lib/calc'
+import { useCountUp } from '../../hooks/useCountUp'
 import type { Shift } from '../../types'
 
 export function WeekTile({ shifts }: { shifts: Shift[] }) {
   const agg = weekAgg(shifts)
+  const animatedTotal = useCountUp(agg.total)
   return (
     <div className="tile p-5 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-24 h-24 bg-sky-soft rounded-full blur-2xl opacity-60 -translate-y-8 translate-x-8 pointer-events-none" />
@@ -17,7 +19,7 @@ export function WeekTile({ shifts }: { shifts: Shift[] }) {
           </div>
           <span className="label">{t.tile.week}</span>
         </div>
-        <div className="num-display text-3xl text-ink mt-2">{fmtIls(agg.total)}</div>
+        <div className="num-display text-3xl text-ink mt-2">{fmtIls(animatedTotal)}</div>
         <div className="text-xs text-body mt-2 flex items-center gap-1 flex-wrap">
           <span>{agg.count} {agg.count === 1 ? t.tile.shift : t.tile.shifts}</span>
           {agg.effectiveRate > 0 && (
@@ -36,6 +38,7 @@ export function MonthTile({ shifts }: { shifts: Shift[] }) {
   const prev = monthAgg(shifts, -1)
   const delta = pctDelta(curr.total, prev.total)
   const isPositive = delta !== null && delta >= 0
+  const animatedTotal = useCountUp(curr.total)
 
   return (
     <div className="tile p-5 relative overflow-hidden">
@@ -59,7 +62,7 @@ export function MonthTile({ shifts }: { shifts: Shift[] }) {
           </div>
           <span className="label">{t.tile.month}</span>
         </div>
-        <div className="num-display text-3xl text-ink mt-2">{fmtIls(curr.total)}</div>
+        <div className="num-display text-3xl text-ink mt-2">{fmtIls(animatedTotal)}</div>
         <div className="text-xs text-body mt-2 flex items-center gap-2 flex-wrap">
           <span>{curr.count} {curr.count === 1 ? t.tile.shift : t.tile.shifts}</span>
           {delta !== null && (

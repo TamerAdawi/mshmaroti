@@ -35,7 +35,7 @@ export default function SplitTile({ shifts }: { shifts: Shift[] }) {
             <div className="w-24 h-24 shrink-0">
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={data} dataKey="value" innerRadius={28} outerRadius={44} startAngle={90} endAngle={450} stroke="none" isAnimationActive={false}>
+                  <Pie data={data} dataKey="value" innerRadius={28} outerRadius={44} startAngle={90} endAngle={450} stroke="none" isAnimationActive animationDuration={700}>
                     {data.map((d) => (
                       <Cell key={d.name} fill={d.color} />
                     ))}

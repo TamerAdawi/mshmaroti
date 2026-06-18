@@ -16,6 +16,7 @@ export interface ShiftRow {
   date: string
   job_type: 'wedding' | 'hourly'
   hours: number
+  break_minutes?: number | null
   start_time: string | null
   end_time: string | null
   base: number

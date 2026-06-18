@@ -9,8 +9,10 @@ export interface Shift {
   startTime?: string
   /** Shift end time, "HH:MM" 24h. Handles overnight (e.g. 20:00 → 02:00). */
   endTime?: string
-  /** Hours worked. Derived from start/end when both present; otherwise user-entered. */
+  /** Hours worked (paid). For hourly time-mode shifts this is the start→end span minus the break. */
   hours: number
+  /** Unpaid break in minutes (hourly job). Deducted from the start→end span to get paid hours. */
+  breakMinutes?: number
   /** Base pay before tips (200 for wedding regardless of hours; hours*35 for hourly) */
   base: number
   /** Tips for the shift */

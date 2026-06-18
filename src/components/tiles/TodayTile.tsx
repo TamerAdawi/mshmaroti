@@ -1,11 +1,13 @@
 import { t } from '../../strings'
 import { fmtIls, fmtHours, fmtDateFull, todayIso } from '../../lib/utils'
 import { todayAgg } from '../../lib/calc'
+import { useCountUp } from '../../hooks/useCountUp'
 import type { Shift } from '../../types'
 
 export default function TodayTile({ shifts }: { shifts: Shift[] }) {
   const agg = todayAgg(shifts)
   const hasShifts = agg.count > 0
+  const animatedTotal = useCountUp(agg.total)
   // Sum expenses from today's shifts
   const todayExpenses = shifts
     .filter((s) => s.date === todayIso())
@@ -20,8 +22,8 @@ export default function TodayTile({ shifts }: { shifts: Shift[] }) {
 
       {hasShifts ? (
         <div className="relative z-10">
-          <div className="num-display text-5xl md:text-6xl text-white mb-1 drop-shadow-sm">
-            {fmtIls(agg.total)}
+          <div className="num-display text-5xl md:text-6xl text-white mb-1 drop-shadow-sm animate-pop-in">
+            {fmtIls(animatedTotal)}
           </div>
           <div className="flex flex-wrap gap-2 mt-4">
             <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-white/20 backdrop-blur-sm text-white">

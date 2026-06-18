@@ -33,8 +33,10 @@ export default function Report() {
   const [opts, setOpts] = useState<Omit<ReportOptions, 'monthOffset'>>({
     includeSummary: true,
     includeJobBreakdown: true,
+    includeDeductions: true,
     includeEffectiveRate: true,
     includeShifts: true,
+    includeTimes: true,
     includeTips: true,
     includeExpenses: true,
     includeNotes: true,
@@ -128,10 +130,12 @@ export default function Report() {
         <div className="label mb-2">{t.report.include}</div>
         <ToggleRow label={t.report.includeSummary} checked={opts.includeSummary} onChange={() => toggle('includeSummary')} />
         <ToggleRow label={t.report.includeJobBreakdown} checked={opts.includeJobBreakdown} onChange={() => toggle('includeJobBreakdown')} />
+        <ToggleRow label={t.report.includeDeductions} checked={opts.includeDeductions} onChange={() => toggle('includeDeductions')} />
         <ToggleRow label={t.report.includeEffectiveRate} checked={opts.includeEffectiveRate} onChange={() => toggle('includeEffectiveRate')} />
         <ToggleRow label={t.report.includeShifts} checked={opts.includeShifts} onChange={() => toggle('includeShifts')} />
         {opts.includeShifts && (
           <div className="pr-4 border-r-2 border-line mr-1 space-y-2 mt-2">
+            <ToggleRow small label={t.report.includeTimes} checked={opts.includeTimes} onChange={() => toggle('includeTimes')} />
             <ToggleRow small label={t.report.includeTips} checked={opts.includeTips} onChange={() => toggle('includeTips')} />
             <ToggleRow small label={t.report.includeExpenses} checked={opts.includeExpenses} onChange={() => toggle('includeExpenses')} />
             <ToggleRow small label={t.report.includeNotes} checked={opts.includeNotes} onChange={() => toggle('includeNotes')} />

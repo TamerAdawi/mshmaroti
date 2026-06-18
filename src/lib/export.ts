@@ -1,7 +1,7 @@
 import type { Shift } from '../types'
 import { bulkImport, fetchAllShifts } from './api'
 
-const CSV_HEADERS = ['id', 'date', 'jobType', 'hours', 'startTime', 'endTime', 'base', 'tips', 'expenses', 'total', 'notes', 'createdAt']
+const CSV_HEADERS = ['id', 'date', 'jobType', 'hours', 'breakMinutes', 'startTime', 'endTime', 'base', 'tips', 'expenses', 'total', 'notes', 'createdAt']
 
 function csvEscape(v: unknown): string {
   const s = v == null ? '' : String(v)
@@ -16,7 +16,7 @@ export async function exportCsv(): Promise<Blob> {
   const rows = [CSV_HEADERS.join(',')]
   for (const s of shifts) {
     rows.push(
-      [s.id, s.date, s.jobType, s.hours, s.startTime ?? '', s.endTime ?? '', s.base, s.tips, s.expenses ?? 0, s.total, s.notes ?? '', s.createdAt]
+      [s.id, s.date, s.jobType, s.hours, s.breakMinutes ?? 0, s.startTime ?? '', s.endTime ?? '', s.base, s.tips, s.expenses ?? 0, s.total, s.notes ?? '', s.createdAt]
         .map(csvEscape)
         .join(','),
     )

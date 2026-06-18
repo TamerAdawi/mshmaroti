@@ -4,11 +4,13 @@ import { DEFAULT_SETTINGS } from '../lib/settings'
 import { clearAll } from '../lib/api'
 import { exportCsv, exportJson, downloadBlob, importJsonFile, makeFilename } from '../lib/export'
 import { useAuth } from '../lib/auth'
+import { useTheme } from '../hooks/useTheme'
 import { t } from '../strings'
 import { cn } from '../lib/utils'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
+  const [theme, setTheme] = useTheme()
   const [settings, update] = useSettings()
   const [draft, setDraft] = useState(settings)
   const [toast, setToast] = useState<string | null>(null)
@@ -54,6 +56,15 @@ export default function Settings() {
   return (
     <div className="mx-auto max-w-lg mt-2 space-y-4">
       <h2 className="font-display text-2xl font-bold px-1 text-gradient inline-block">{t.settings.title}</h2>
+
+      <section className="tile p-5 space-y-3">
+        <div className="label">{t.settings.appearance}</div>
+        <div className="flex gap-1 p-1 bg-elevate rounded-xl border border-line">
+          <ThemeButton active={theme === 'light'} onClick={() => setTheme('light')} label={t.settings.themeLight} />
+          <ThemeButton active={theme === 'dark'} onClick={() => setTheme('dark')} label={t.settings.themeDark} />
+          <ThemeButton active={theme === 'system'} onClick={() => setTheme('system')} label={t.settings.themeSystem} />
+        </div>
+      </section>
 
       <section className="tile p-5 space-y-4">
         <div>
@@ -222,5 +233,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="label mb-2">{label}</div>
       {children}
     </label>
+  )
+}
+
+function ThemeButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex-1 rounded-lg py-2 text-sm font-semibold transition active:scale-95',
+        active ? 'bg-surface text-ink shadow-tile' : 'text-muted hover:text-body',
+      )}
+    >
+      {label}
+    </button>
   )
 }

@@ -10,6 +10,7 @@ create table public.shifts (
   date        date not null,
   job_type    text not null check (job_type in ('wedding', 'hourly')),
   hours       numeric(5,2) not null check (hours >= 0),
+  break_minutes integer not null default 0 check (break_minutes >= 0), -- unpaid break (hourly job)
   start_time  text,   -- "HH:MM" or null
   end_time    text,   -- "HH:MM" or null
   base        numeric(10,2) not null check (base >= 0),

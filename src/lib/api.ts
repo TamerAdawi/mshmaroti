@@ -13,6 +13,7 @@ export function rowToShift(row: ShiftRow): Shift {
     date: row.date,
     jobType: row.job_type,
     hours: Number(row.hours),
+    breakMinutes: row.break_minutes != null ? Number(row.break_minutes) : 0,
     startTime: row.start_time ?? undefined,
     endTime: row.end_time ?? undefined,
     base: Number(row.base),
@@ -61,6 +62,7 @@ export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>)
       date: input.date,
       job_type: input.jobType,
       hours: input.hours,
+      break_minutes: input.breakMinutes ?? 0,
       start_time: input.startTime ?? null,
       end_time: input.endTime ?? null,
       base: input.base,
@@ -85,6 +87,7 @@ export async function updateShift(
   if (patch.date !== undefined) updates.date = patch.date
   if (patch.jobType !== undefined) updates.job_type = patch.jobType
   if (patch.hours !== undefined) updates.hours = patch.hours
+  if (patch.breakMinutes !== undefined) updates.break_minutes = patch.breakMinutes
   if (patch.startTime !== undefined) updates.start_time = patch.startTime ?? null
   if (patch.endTime !== undefined) updates.end_time = patch.endTime ?? null
   if (patch.base !== undefined) updates.base = patch.base
@@ -144,6 +147,7 @@ export async function bulkImport(shifts: Shift[]): Promise<void> {
     date: s.date,
     job_type: s.jobType,
     hours: s.hours,
+    break_minutes: s.breakMinutes ?? 0,
     start_time: s.startTime ?? null,
     end_time: s.endTime ?? null,
     base: s.base,

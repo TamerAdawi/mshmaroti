@@ -62,8 +62,8 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
                 formatter={(value: number, name: string) => [fmtIls(value), name]}
                 labelFormatter={(v: string) => fmtDateShort(v)}
               />
-              <Bar dataKey="wedding" stackId="a" fill="#6366f1" name={settings.weddingName} />
-              <Bar dataKey="hourly" stackId="a" fill="#fb7185" name={settings.hourlyName} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="wedding" stackId="a" fill="#6366f1" name={settings.weddingName} isAnimationActive animationDuration={700} />
+              <Bar dataKey="hourly" stackId="a" fill="#fb7185" name={settings.hourlyName} radius={[4, 4, 0, 0]} isAnimationActive animationDuration={700} />
             </BarChart>
           </ResponsiveContainer>
         </div>

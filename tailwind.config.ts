@@ -2,22 +2,24 @@ import type { Config } from 'tailwindcss'
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
-        display: ['Assistant', 'system-ui', 'sans-serif'],
+        display: ['Rubik', 'Assistant', 'system-ui', 'sans-serif'],
         sans: ['Assistant', 'system-ui', 'sans-serif'],
       },
       colors: {
-        bg: '#fafbff',
-        surface: '#ffffff',
-        elevate: '#f4f5fb',
-        line: '#e5e7f0',
-        lineSoft: '#eef0f7',
-        ink: '#0f1020',
-        body: '#3d4258',
-        muted: '#8a8fa8',
-        mutedSoft: '#b8bdd0',
+        // Neutral tokens are CSS variables (RGB triplets) so they flip in dark mode.
+        bg: 'rgb(var(--c-bg) / <alpha-value>)',
+        surface: 'rgb(var(--c-surface) / <alpha-value>)',
+        elevate: 'rgb(var(--c-elevate) / <alpha-value>)',
+        line: 'rgb(var(--c-line) / <alpha-value>)',
+        lineSoft: 'rgb(var(--c-line-soft) / <alpha-value>)',
+        ink: 'rgb(var(--c-ink) / <alpha-value>)',
+        body: 'rgb(var(--c-body) / <alpha-value>)',
+        muted: 'rgb(var(--c-muted) / <alpha-value>)',
+        mutedSoft: 'rgb(var(--c-muted-soft) / <alpha-value>)',
         indigo: {
           DEFAULT: '#6366f1',
           soft: '#eef0ff',

@@ -3,15 +3,18 @@ import autoTable from 'jspdf-autotable'
 import type { Shift } from '../types'
 import { HEBREW_FONT_REGULAR, HEBREW_FONT_BOLD } from './hebrewFont'
 import type { Settings } from './settings'
-import { aggregate, jobSplit } from './calc'
-import { filterByDateRange } from './calc'
+import { aggregate, jobSplit, filterByDateRange } from './calc'
+import { calcMonthlyBreakdown } from './payroll'
+import { t } from '../strings'
 
 export interface ReportOptions {
   monthOffset: number // 0 = current, -1 = last month
   includeSummary: boolean
   includeJobBreakdown: boolean
+  includeDeductions: boolean
   includeEffectiveRate: boolean
   includeShifts: boolean
+  includeTimes: boolean
   includeTips: boolean
   includeExpenses: boolean
   includeNotes: boolean
@@ -136,42 +139,54 @@ export async function generateReport(
 
   const agg = aggregate(filtered)
   const split = jobSplit(filtered)
+  const breakdown = calcMonthlyBreakdown(filtered, settings)
+  const expensesTotal = filtered.reduce((sum, s) => sum + (s.expenses ?? 0), 0)
 
   // ===== SUMMARY =====
   if (options.includeSummary) {
-    sectionTitle(doc, rev('סיכום'), marginX, y, pageW)
+    sectionTitle(doc, rev(t.report.summary), marginX, y, pageW)
     y += 8
 
-    const summaryRows: Array<[string, string, [number, number, number]]> = [
-      [rev('סך ברוטו'), fmtPdfIls(agg.total), COLORS.indigo],
-      [rev('סך שעות'), fmtPdfHours(agg.hours), COLORS.violet],
-      [rev('משמרות'), String(agg.count), COLORS.coral],
-      [rev('ממוצע לשעה'), fmtPdfIls(agg.effectiveRate), COLORS.lime],
+    // Up to 8 stat boxes laid out 4 per row.
+    const summaryCells: Array<[string, string, [number, number, number]]> = [
+      [rev(t.report.totalGross), fmtPdfIls(agg.total), COLORS.indigo],
+      [rev(t.report.totalHours), fmtPdfHours(agg.hours), COLORS.violet],
+      [rev(t.report.shiftCount), String(agg.count), COLORS.coral],
+      [rev(t.report.avgPerHour), fmtPdfIls(agg.effectiveRate), COLORS.lime],
+      [rev(t.report.totalTips), fmtPdfIls(agg.tips), COLORS.pink],
+      [rev(t.report.totalExpenses), fmtPdfIls(expensesTotal), COLORS.coral],
+      [rev(t.report.totalNet), fmtPdfIls(breakdown.totalNet), COLORS.indigo],
+      [rev(t.report.avgPerShift), fmtPdfIls(agg.avgPerShift), COLORS.violet],
     ]
 
-    const boxW = (pageW - marginX * 2 - 6) / 4
+    const perRow = 4
+    const boxW = (pageW - marginX * 2 - (perRow - 1) * 2) / perRow
     const boxH = 22
-    summaryRows.forEach(([label, value, color], i) => {
-      const x = marginX + i * (boxW + 2)
+    summaryCells.forEach(([label, value, color], i) => {
+      const col = i % perRow
+      const rowIdx = Math.floor(i / perRow)
+      const x = marginX + col * (boxW + 2)
+      const by = y + rowIdx * (boxH + 2)
       // Box
       doc.setFillColor(...COLORS.bg)
       doc.setDrawColor(...COLORS.line)
-      doc.roundedRect(x, y, boxW, boxH, 2, 2, 'FD')
+      doc.roundedRect(x, by, boxW, boxH, 2, 2, 'FD')
       // Colored dot
       doc.setFillColor(...color)
-      doc.circle(x + 3, y + 4, 1.3, 'F')
+      doc.circle(x + 3, by + 4, 1.3, 'F')
       // Label
       doc.setTextColor(...COLORS.muted)
       doc.setFont('Hebrew', 'normal')
       doc.setFontSize(8)
-      doc.text(label, x + boxW - 2, y + 5, { align: 'right' })
+      doc.text(label, x + boxW - 2, by + 5, { align: 'right' })
       // Value — use regular Hebrew font (bold may lack Latin glyphs)
       doc.setTextColor(...COLORS.ink)
       doc.setFont('Hebrew', 'normal')
-      doc.setFontSize(14)
-      doc.text(value, x + boxW - 2, y + 15, { align: 'right' })
+      doc.setFontSize(13)
+      doc.text(value, x + boxW - 2, by + 15, { align: 'right' })
     })
-    y += boxH + 8
+    const rowsUsed = Math.ceil(summaryCells.length / perRow)
+    y += rowsUsed * (boxH + 2) + 6
   }
 
   // ===== JOB BREAKDOWN =====
@@ -214,6 +229,87 @@ export async function generateReport(
     y += 4
   }
 
+  // ===== DEDUCTIONS / NET =====
+  if (options.includeDeductions && (breakdown.hourlyShifts > 0 || breakdown.weddingShifts > 0)) {
+    if (y > 235) {
+      doc.addPage()
+      y = 20
+    }
+    sectionTitle(doc, rev(t.report.deductions), marginX, y, pageW)
+    y += 8
+
+    interface DedLine {
+      header?: string
+      label?: string
+      value?: string
+      color?: [number, number, number]
+      bold?: boolean
+      rule?: boolean
+    }
+    const lines: DedLine[] = []
+
+    if (breakdown.hourlyShifts > 0) {
+      lines.push({ header: settings.hourlyName })
+      lines.push({ label: t.report.grossWages, value: fmtPdfIls(breakdown.hourlyWages), color: COLORS.ink })
+      if (breakdown.hourlyTravel > 0)
+        lines.push({ label: t.report.travel, value: `+${fmtPdfIls(breakdown.hourlyTravel)}`, color: COLORS.lime })
+      if (breakdown.hourlyBituach > 0)
+        lines.push({ label: t.report.bituach, value: `-${fmtPdfIls(breakdown.hourlyBituach)}  (${(settings.bituachRate * 100).toFixed(2)}%)`, color: COLORS.coral })
+      if (breakdown.hourlyPension > 0)
+        lines.push({ label: t.report.pension, value: `-${fmtPdfIls(breakdown.hourlyPension)}  (${(settings.pensionRate * 100).toFixed(1)}%)`, color: COLORS.coral })
+      if (breakdown.hourlyTax > 0)
+        lines.push({ label: t.report.incomeTax, value: `-${fmtPdfIls(breakdown.hourlyTax)}  (${(settings.incomeTaxRate * 100).toFixed(1)}%)`, color: COLORS.coral })
+      lines.push({ label: t.report.netWage, value: fmtPdfIls(breakdown.hourlyNet), color: COLORS.indigo, bold: true, rule: true })
+    }
+    if (breakdown.weddingShifts > 0) {
+      lines.push({ header: settings.weddingName })
+      lines.push({ label: t.report.cashNoDeductions, value: fmtPdfIls(breakdown.weddingTotal), color: COLORS.ink, bold: true })
+    }
+
+    const rowH = 7
+    const boxW = pageW - marginX * 2
+    const boxH = lines.length * rowH + 6
+    doc.setFillColor(...COLORS.bg)
+    doc.setDrawColor(...COLORS.line)
+    doc.roundedRect(marginX, y, boxW, boxH, 2, 2, 'FD')
+
+    let ly = y + 7
+    lines.forEach((ln) => {
+      if (ln.rule) {
+        doc.setDrawColor(...COLORS.line)
+        doc.setLineWidth(0.2)
+        doc.line(marginX + 4, ly - 4, marginX + boxW - 4, ly - 4)
+      }
+      if (ln.header) {
+        doc.setTextColor(...COLORS.ink)
+        doc.setFont('Hebrew', 'bold')
+        doc.setFontSize(10)
+        doc.text(rev(ln.header), marginX + boxW - 4, ly, { align: 'right' })
+      } else {
+        // Label on the right (RTL), value on the left (LTR numbers)
+        doc.setTextColor(...COLORS.body)
+        doc.setFont('Hebrew', ln.bold ? 'bold' : 'normal')
+        doc.setFontSize(ln.bold ? 10 : 9)
+        doc.text(rev(ln.label ?? ''), marginX + boxW - 4, ly, { align: 'right' })
+        doc.setTextColor(...(ln.color ?? COLORS.body))
+        doc.text(ln.value ?? '', marginX + 4, ly, { align: 'left' })
+      }
+      ly += rowH
+    })
+    y += boxH + 4
+
+    // Combined net band when both jobs are present
+    if (breakdown.hourlyShifts > 0 && breakdown.weddingShifts > 0) {
+      drawGradientBand(doc, marginX, y, boxW, 12)
+      doc.setTextColor(255, 255, 255)
+      doc.setFont('Hebrew', 'bold')
+      doc.setFontSize(10)
+      doc.text(rev(t.report.combinedNet), pageW - marginX - 5, y + 7.5, { align: 'right' })
+      doc.text(fmtPdfIls(breakdown.totalNet), marginX + 5, y + 7.5, { align: 'left' })
+      y += 16
+    }
+  }
+
   // ===== EFFECTIVE RATE COMPARISON =====
   if (options.includeEffectiveRate && split.wedding.effectiveRate > 0 && split.hourly.effectiveRate > 0) {
     sectionTitle(doc, rev('שכר שעתי אפקטיבי'), marginX, y, pageW)
@@ -237,7 +333,7 @@ export async function generateReport(
       doc.setTextColor(...COLORS.ink)
       doc.setFont('Hebrew', 'bold')
       doc.setFontSize(10)
-      doc.text(rev(r.name) + (r.isWin ? ' ★' : ''), pageW - marginX, y + 4, { align: 'right' })
+      doc.text(rev(r.name) + (r.isWin ? ' *' : ''), pageW - marginX, y + 4, { align: 'right' })
       // Rate value
       doc.setTextColor(...r.color)
       doc.setFont('Hebrew', 'bold')
@@ -278,34 +374,43 @@ export async function generateReport(
     sectionTitle(doc, rev('משמרות'), marginX, y, pageW)
     y += 6
 
-    const headCells = [rev('תאריך'), rev('עבודה'), rev('שעות'), rev('בסיס')]
-    if (options.includeTips) headCells.push(rev('טיפים'))
-    if (options.includeExpenses) headCells.push(rev('הוצאות'))
-    headCells.push(rev('סך הכל'))
-    if (options.includeNotes) headCells.push(rev('הערות'))
+    const headCells = [rev(t.report.colDate), rev(t.report.colJob)]
+    if (options.includeTimes) headCells.push(rev(t.report.colTime))
+    headCells.push(rev(t.report.colHours), rev(t.report.colBase))
+    if (options.includeTips) headCells.push(rev(t.report.colTips))
+    if (options.includeExpenses) headCells.push(rev(t.report.colExpenses))
+    headCells.push(rev(t.report.colTotal))
+    if (options.includeNotes) headCells.push(rev(t.report.colNotes))
 
     const body = filtered.map((s) => {
       const jobName = s.jobType === 'wedding' ? settings.weddingName : settings.hourlyName
       // Show multiplier indicator in base column when != 1.0
       const mult = s.rateMultiplier ?? 1.0
       const baseCell = mult !== 1.0 && s.jobType === 'hourly'
-        ? `${fmtPdfIls(s.base)} (×${mult})`
+        ? `${fmtPdfIls(s.base)} (x${mult})`
         : fmtPdfIls(s.base)
-      // Tips winner indicator: for hourly shifts where tips > base, mark with ★
+      // Tips winner indicator: for hourly shifts where tips > base, mark with *
       const tipsWon = s.jobType === 'hourly' && s.tips > s.base
-      const totalCell = tipsWon ? `${fmtPdfIls(s.total)} ★` : fmtPdfIls(s.total)
-      const row: Array<string> = [
-        fmtPdfDate(s.date),
-        rev(jobName),
-        fmtPdfHours(s.hours),
-        baseCell,
-      ]
+      const totalCell = tipsWon ? `${fmtPdfIls(s.total)} *` : fmtPdfIls(s.total)
+      // Show unpaid break alongside paid hours
+      const brk = s.breakMinutes ?? 0
+      const hoursCell = brk > 0 ? `${fmtPdfHours(s.hours)} (-${brk}m)` : fmtPdfHours(s.hours)
+      const timeCell = s.startTime && s.endTime ? `${s.startTime}-${s.endTime}` : '—'
+      const row: Array<string> = [fmtPdfDate(s.date), rev(jobName)]
+      if (options.includeTimes) row.push(timeCell)
+      row.push(hoursCell, baseCell)
       if (options.includeTips) row.push(fmtPdfIls(s.tips))
       if (options.includeExpenses) row.push(fmtPdfIls(s.expenses ?? 0))
       row.push(totalCell)
       if (options.includeNotes) row.push(s.notes ? rev(s.notes) : '—')
       return row
     })
+
+    const columnStyles: { [k: number]: { halign: 'left' | 'center' | 'right' } } = {
+      0: { halign: 'center' },
+      1: { halign: 'right' },
+    }
+    if (options.includeTimes) columnStyles[2] = { halign: 'center' }
 
     autoTable(doc, {
       head: [headCells],
@@ -327,7 +432,7 @@ export async function generateReport(
         halign: 'center',
       },
       alternateRowStyles: { fillColor: COLORS.bg },
-      columnStyles: { 0: { halign: 'center' }, 1: { halign: 'right' } },
+      columnStyles,
     })
 
     // Legend if any tips-won shifts in the period
@@ -337,7 +442,7 @@ export async function generateReport(
       doc.setTextColor(...COLORS.muted)
       doc.setFont('Hebrew', 'normal')
       doc.setFontSize(7)
-      doc.text(rev('טיפים גבוהים מהחישוב השעתי - חוק שירות וטיפים') + ' = ★', pageW - marginX, tableEnd + 4, { align: 'right' })
+      doc.text(rev('טיפים גבוהים מהחישוב השעתי - חוק שירות וטיפים') + ' = *', pageW - marginX, tableEnd + 4, { align: 'right' })
     }
   }
 

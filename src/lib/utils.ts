@@ -81,6 +81,45 @@ export function endOfMonthIso(offset = 0): string {
   return toIso(d)
 }
 
+/** Year + 0-indexed month for a month `offset` from the current month. */
+export function monthFromOffset(offset = 0): { year: number; month: number } {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + offset)
+  return { year: d.getFullYear(), month: d.getMonth() }
+}
+
+/** Hebrew month + year label, e.g. "אפריל 2026", for a month offset. */
+export function monthLabel(offset = 0): string {
+  const { year, month } = monthFromOffset(offset)
+  return new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' }).format(
+    new Date(year, month, 1),
+  )
+}
+
+export interface CalendarCell {
+  iso: string
+  day: number
+}
+
+/**
+ * Weeks of a month as a grid, Sunday-first to match the Israeli week.
+ * Leading/trailing blanks are null so every week has 7 cells.
+ */
+export function buildMonthMatrix(year: number, month: number): (CalendarCell | null)[][] {
+  const startDow = new Date(year, month, 1).getDay() // 0 = Sunday
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: (CalendarCell | null)[] = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ iso: toIso(new Date(year, month, d)), day: d })
+  }
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weeks: (CalendarCell | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
+}
+
 /** Start of current week (Sunday-based, Israeli week). */
 export function startOfWeekIso(): string {
   const d = new Date()

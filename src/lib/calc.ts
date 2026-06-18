@@ -107,6 +107,24 @@ export function trendDaily(shifts: Shift[], days = 30): TrendPoint[] {
   return Array.from(map.values())
 }
 
+export interface DayTotal {
+  total: number
+  count: number
+}
+
+/** Per-day totals for a month (keyed by ISO date). Used by the calendar heatmap. */
+export function dailyTotalsForMonth(shifts: Shift[], offset = 0): Map<string, DayTotal> {
+  const inMonth = filterByDateRange(shifts, startOfMonthIso(offset), endOfMonthIso(offset))
+  const map = new Map<string, DayTotal>()
+  for (const s of inMonth) {
+    const cur = map.get(s.date) ?? { total: 0, count: 0 }
+    cur.total += s.total
+    cur.count += 1
+    map.set(s.date, cur)
+  }
+  return map
+}
+
 /** Percent delta vs previous period. Returns null if prev is 0 (avoids Infinity). */
 export function pctDelta(curr: number, prev: number): number | null {
   if (prev === 0) return null

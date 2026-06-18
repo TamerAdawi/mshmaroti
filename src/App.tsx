@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { t } from './strings'
 import { cn } from './lib/utils'
+import { useTheme } from './hooks/useTheme'
+import { resolveDark } from './lib/theme'
 import { AuthProvider, useAuth } from './lib/auth'
 import AuthScreen from './components/AuthScreen'
 import Dashboard from './components/Dashboard'
@@ -55,20 +57,25 @@ function AppShell() {
   return (
     <div className="min-h-dvh flex flex-col safe-top">
       <header className="px-5 pt-4 pb-3">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between">
           <h1 className="font-display text-3xl font-extrabold text-gradient">{t.appName}</h1>
-          <span className="label">{t.tagline}</span>
+          <div className="flex items-center gap-3">
+            <span className="label">{t.tagline}</span>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <main className="flex-1 px-4 pb-32 overflow-x-hidden">
-        {tab === 'dashboard' && <Dashboard onNew={() => goTo('new')} onEdit={onEdit} />}
-        {tab === 'new' && (
-          <NewShift editing={editing} onDone={() => goTo('dashboard')} onCancel={() => goTo('dashboard')} />
-        )}
-        {tab === 'history' && <History onEdit={onEdit} />}
-        {tab === 'report' && <Report />}
-        {tab === 'settings' && <Settings />}
+        <div key={editing ? `${tab}-edit` : tab} className="animate-fade-up">
+          {tab === 'dashboard' && <Dashboard onNew={() => goTo('new')} onEdit={onEdit} />}
+          {tab === 'new' && (
+            <NewShift editing={editing} onDone={() => goTo('dashboard')} onCancel={() => goTo('dashboard')} />
+          )}
+          {tab === 'history' && <History onEdit={onEdit} />}
+          {tab === 'report' && <Report />}
+          {tab === 'settings' && <Settings />}
+        </div>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 bg-surface/90 backdrop-blur-xl border-t border-line safe-bottom" role="tablist">
@@ -84,12 +91,35 @@ function AppShell() {
   )
 }
 
+function ThemeToggle() {
+  const [theme, setTheme] = useTheme()
+  const isDark = resolveDark(theme)
+  return (
+    <button
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      aria-label={t.settings.appearance}
+      className="w-9 h-9 rounded-lg bg-elevate border border-line flex items-center justify-center text-body hover:text-ink transition active:scale-90"
+    >
+      {isDark ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 function TabButton({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: 'bento' | 'plus' | 'list' | 'doc' | 'gear' }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        'flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition',
+        'flex flex-col items-center gap-1 py-2 px-1 rounded-lg transition active:scale-90',
         active ? 'text-indigo-deep' : 'text-muted hover:text-body',
       )}
       role="tab"

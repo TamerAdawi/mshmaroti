@@ -25,6 +25,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
   const [hoursInput, setHoursInput] = useState(editing ? String(editing.hours) : '')
   const [tipsInput, setTipsInput] = useState(editing ? String(editing.tips) : '')
   const [expensesInput, setExpensesInput] = useState(editing && (editing.expenses ?? 0) > 0 ? String(editing.expenses) : '')
+  const [breakInput, setBreakInput] = useState(editing && (editing.breakMinutes ?? 0) > 0 ? String(editing.breakMinutes) : '')
   const [multiplierInput, setMultiplierInput] = useState(
     editing?.rateMultiplier && editing.rateMultiplier !== 1.0 ? String(editing.rateMultiplier) : '1'
   )
@@ -37,11 +38,23 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
     if (jobType === 'hourly' && mode === 'hours') setMode('time')
   }, [jobType, mode])
 
+  // Unpaid break in minutes — only applies to the hourly job.
+  const breakMinutes = useMemo(() => {
+    if (jobType !== 'hourly') return 0
+    const n = Number(breakInput)
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
+  }, [jobType, breakInput])
+
   const computedHours = useMemo(() => {
-    if (mode === 'time') return hoursBetween(startTime, endTime)
+    if (mode === 'time') {
+      const span = hoursBetween(startTime, endTime)
+      if (span === null) return null
+      const net = Math.round((span - breakMinutes / 60) * 100) / 100
+      return net > 0 ? net : null
+    }
     const n = Number(hoursInput)
     return Number.isFinite(n) && n > 0 ? n : null
-  }, [mode, startTime, endTime, hoursInput])
+  }, [mode, startTime, endTime, hoursInput, breakMinutes])
 
   const isOvernight = useMemo(() => {
     if (mode !== 'time') return false
@@ -95,7 +108,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
     return breakdown?.gross ?? Math.max(base, tips)
   }, [jobType, base, tips, breakdown])
 
-  useEffect(() => setError(null), [date, jobType, mode, startTime, endTime, hoursInput, tipsInput, expensesInput, multiplierInput])
+  useEffect(() => setError(null), [date, jobType, mode, startTime, endTime, hoursInput, tipsInput, expensesInput, multiplierInput, breakInput])
 
   const canSubmit = computedHours !== null && computedHours > 0 && !submitting
 
@@ -112,6 +125,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
         date,
         jobType,
         hours: computedHours!,
+        breakMinutes: jobType === 'hourly' ? breakMinutes : 0,
         base,
         tips,
         expenses,
@@ -192,10 +206,29 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
             </Field>
           )}
 
+          {jobType === 'hourly' && mode === 'time' && (
+            <Field label={t.form.breakTime}>
+              <input
+                type="number"
+                inputMode="numeric"
+                step="5"
+                min="0"
+                placeholder={t.form.breakPlaceholder}
+                value={breakInput}
+                onChange={(e) => setBreakInput(e.target.value)}
+                className="input-field tabular-nums"
+              />
+              <div className="text-[11px] text-muted mt-1 px-1">{t.form.breakHint}</div>
+            </Field>
+          )}
+
           {computedHours !== null && computedHours > 0 && mode === 'time' && (
             <div className="text-xs text-indigo-deep px-1 font-semibold">
               {t.form.computedHours.replace('{h}', String(computedHours))}
               {isOvernight && <span className="text-muted mr-2 font-normal">· {t.form.overnightHint}</span>}
+              {breakMinutes > 0 && (
+                <span className="text-muted mr-2 font-normal">· {t.form.breakDeducted.replace('{m}', String(breakMinutes))}</span>
+              )}
             </div>
           )}
 

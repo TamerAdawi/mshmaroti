@@ -5,6 +5,29 @@
 @layer base {
   :root {
     color-scheme: light;
+    /* Neutral palette (RGB triplets, consumed via rgb(var(--x) / a)) */
+    --c-bg: 250 251 255;
+    --c-surface: 255 255 255;
+    --c-elevate: 244 245 251;
+    --c-line: 229 231 240;
+    --c-line-soft: 238 240 247;
+    --c-ink: 15 16 32;
+    --c-body: 61 66 88;
+    --c-muted: 138 143 168;
+    --c-muted-soft: 184 189 208;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --c-bg: 11 12 24;
+    --c-surface: 23 25 43;
+    --c-elevate: 32 34 56;
+    --c-line: 44 47 73;
+    --c-line-soft: 35 37 60;
+    --c-ink: 237 238 248;
+    --c-body: 185 190 214;
+    --c-muted: 140 146 176;
+    --c-muted-soft: 92 98 124;
   }
 
   html,
@@ -42,7 +65,7 @@
 @layer components {
   .tile {
     @apply relative rounded-2xl bg-surface shadow-tile overflow-hidden transition-shadow;
-    border: 1px solid theme('colors.line');
+    border: 1px solid rgb(var(--c-line));
   }
   .tile:hover {
     box-shadow: theme('boxShadow.tileHover');
@@ -65,11 +88,12 @@
 
   .tile-colored {
     @apply relative rounded-2xl overflow-hidden;
-    border: 1px solid theme('colors.line');
+    border: 1px solid rgb(var(--c-line));
   }
 
   .num-display {
-    @apply font-display tabular-nums tracking-tight font-bold;
+    @apply font-display tabular-nums font-extrabold;
+    letter-spacing: -0.015em;
   }
 
   .label {
@@ -79,14 +103,14 @@
 
   .input-field {
     @apply w-full rounded-xl bg-surface px-4 py-3 text-base text-ink outline-none transition;
-    border: 1px solid theme('colors.line');
+    border: 1px solid rgb(var(--c-line));
   }
   .input-field:focus {
     border-color: theme('colors.indigo.DEFAULT');
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
   }
   .input-field::placeholder {
-    color: theme('colors.mutedSoft');
+    color: rgb(var(--c-muted-soft));
   }
 
   .btn-primary {
@@ -101,10 +125,10 @@
 
   .btn-secondary {
     @apply rounded-xl px-5 py-3 font-semibold text-ink transition bg-elevate active:scale-[0.98];
-    border: 1px solid theme('colors.line');
+    border: 1px solid rgb(var(--c-line));
   }
   .btn-secondary:hover {
-    background: theme('colors.lineSoft');
+    background: rgb(var(--c-line-soft));
   }
 
   .btn-danger {
@@ -115,9 +139,9 @@
 
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
-    border: 1px solid theme('colors.line');
-    color: theme('colors.body');
-    background: theme('colors.surface');
+    border: 1px solid rgb(var(--c-line));
+    color: rgb(var(--c-body));
+    background: rgb(var(--c-surface));
   }
   .chip-active {
     background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
@@ -164,6 +188,63 @@
   }
 }
 
+/* ---------- Dark mode polish ---------- */
+/* Soft accent tints are light by design; swap to translucent fills on dark. */
+.dark .chip-indigo { background: rgba(99, 102, 241, 0.18); color: #c7d2fe; border-color: rgba(99, 102, 241, 0.35); }
+.dark .chip-lime { background: rgba(132, 204, 22, 0.18); color: #d9f99d; border-color: rgba(132, 204, 22, 0.35); }
+.dark .chip-coral { background: rgba(251, 113, 133, 0.18); color: #fecdd3; border-color: rgba(251, 113, 133, 0.35); }
+.dark .chip-sky { background: rgba(14, 165, 233, 0.18); color: #bae6fd; border-color: rgba(14, 165, 233, 0.35); }
+.dark .chip-peach { background: rgba(251, 146, 60, 0.18); color: #fed7aa; border-color: rgba(251, 146, 60, 0.35); }
+.dark .chip-violet { background: rgba(168, 85, 247, 0.18); color: #e9d5ff; border-color: rgba(168, 85, 247, 0.35); }
+.dark .btn-danger { background: rgba(251, 113, 133, 0.15); color: #fecdd3; border-color: rgba(251, 113, 133, 0.3); }
+.dark .bg-hero-soft { background-image: linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(168, 85, 247, 0.12) 60%, rgba(236, 72, 153, 0.12) 100%); }
+.dark .bg-violet-soft\/60 { background-color: rgba(168, 85, 247, 0.12) !important; }
+.dark .tile { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+
+/* ---------- Motion ---------- */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.012);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-pop-in {
+  animation: pop-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Respect reduced-motion: collapse all entrance/transition animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -172,11 +253,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: theme('colors.line');
+  background: rgb(var(--c-line));
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: theme('colors.mutedSoft');
+  background: rgb(var(--c-muted-soft));
 }
 
 .safe-bottom {

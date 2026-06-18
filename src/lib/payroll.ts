@@ -73,8 +73,10 @@ export function calcShiftPay(
   }
 
   // === Branch 2: standard OT + rest day calc (requires time info) ===
+  // Overlap is measured against the full start→end span; an unpaid break can make
+  // that span longer than the paid `hours`, so clamp to avoid negative regular hours.
   const restDayHours = (shift.startTime && shift.endTime)
-    ? calcRestDayOverlap(shift.date, shift.startTime, shift.endTime)
+    ? Math.min(calcRestDayOverlap(shift.date, shift.startTime, shift.endTime), shift.hours)
     : 0
   const regularHours = shift.hours - restDayHours
 

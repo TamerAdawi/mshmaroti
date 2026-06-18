@@ -1,8 +1,17 @@
 # משמרותי · Mshmaroti
 
-> A Hebrew-first, installable PWA for tracking waitressing shifts across two jobs — with a bento dashboard, Israeli labor-law payroll (overtime, rest-day, deductions), effective hourly-rate analytics, a monthly calendar heatmap, and cloud sync.
+> A Hebrew-first, installable PWA for tracking waitressing shifts across two jobs — bento dashboard, Israeli labor-law payroll (overtime, rest-day, deductions), effective hourly-rate analytics, a monthly calendar heatmap, light/dark themes, and cloud sync.
 
-[Hebrew summary](#תקציר-בעברית) · [Screenshots](#screenshots) · [Development](#development) · [Supabase setup](#supabase-setup) · [Deploy](#deploy-to-github-pages)
+**🔗 Live demo → [tameradawi.github.io/mshmaroti](https://tameradawi.github.io/mshmaroti/)**
+
+![React](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?logo=supabase&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
+
+[Live demo](https://tameradawi.github.io/mshmaroti/) · [Hebrew summary](#תקציר-בעברית) · [Highlights](#highlights) · [Development](#development) · [Supabase setup](#supabase-setup) · [Deploy](#deploy-to-github-pages)
 
 ---
 
@@ -27,6 +36,7 @@ Napkin math told me nothing about which job actually pays better _per hour of my
 - **Configurable rates & job names** — no hardcoded values; update in settings, past shifts preserve their computed pay
 - **PDF monthly reports** (jsPDF, Hebrew-aware) + **CSV export** (UTF-8 BOM so Excel opens Hebrew correctly) + full JSON backup/restore
 - **Cloud sync & multi-user** — Supabase auth (email/password or Google) with row-level security; realtime updates across devices
+- **Light & dark themes** — light / dark / system, with a one-tap toggle in the header and a no-flash theme load
 - **Installable PWA** — add to iOS/Android home screen; standalone fullscreen; offline shell cache
 - **True RTL** — locked Hebrew locale with proper logical-property layout, plus motion that respects `prefers-reduced-motion`
 
@@ -41,7 +51,8 @@ Napkin math told me nothing about which job actually pays better _per hour of my
 | PDF | jsPDF + jspdf-autotable |
 | PWA | `vite-plugin-pwa` (Workbox) |
 | Typography | Rubik (display) + Assistant (UI) |
-| Deploy | GitHub Pages via `gh-pages` |
+| Theming | Light / dark / system via CSS-variable tokens |
+| Deploy | GitHub Actions → GitHub Pages |
 
 ## Architecture
 
@@ -59,11 +70,13 @@ src/
 │  ├─ utils.ts           Date/currency helpers, hoursBetween (overnight), calendar matrix
 │  ├─ export.ts          CSV + JSON export with validated import
 │  ├─ pdfReport.ts       Monthly PDF report
-│  └─ hebrewFont.ts      Embedded Hebrew font for the PDF
+│  ├─ hebrewFont.ts      Embedded Hebrew font for the PDF
+│  └─ theme.ts           Light/dark/system preference (persist + apply)
 ├─ hooks/
 │  ├─ useShifts.ts       Reactive shift queries (realtime)
 │  ├─ useSettings.ts     Reactive settings (realtime)
-│  └─ useCountUp.ts      Animated number count-up (reduced-motion aware)
+│  ├─ useCountUp.ts      Animated number count-up (reduced-motion aware)
+│  └─ useTheme.ts        Reactive theme preference
 ├─ components/
 │  ├─ AuthScreen.tsx     Sign in / sign up
 │  ├─ Dashboard.tsx      Bento grid
@@ -167,14 +180,14 @@ remains available as a fallback.
 </tr>
 </table>
 
-> Screenshots predate the latest visual pass (Rubik display font, motion, calendar heatmap); they'll be refreshed.
+> Screenshots predate the latest visual pass (Rubik font, motion, calendar heatmap, dark mode) and will be refreshed.
 
 ## Roadmap
 
+- [x] Dark mode (light / dark / system)
 - [ ] Goal-tracking tile (monthly income target with progress ring)
 - [ ] Bilingual EN/HE toggle (strings are already centralized)
 - [ ] Deeper insights (best weekday, tip-% trends, cumulative earnings)
-- [ ] Dark mode
 
 ## תקציר בעברית
 
@@ -183,7 +196,7 @@ remains available as a fallback.
 - עבודה 1 (אולם אירועים): שכר יומי קבוע + תשר
 - עבודה 2 (שעתי): שכר שעתי + תשר, כולל חישוב שעות נוספות, יום מנוחה וניכויים לפי חוק
 
-לוח בקרה בסגנון bento, לוח חודשי עם מפת חום, ניכוי הפסקה לא בתשלום, דוח PDF חודשי, ייצוא ל-CSV ו-JSON, תמיכה במשמרות לילה שחוצות חצות, ומדד "שכר שעתי אפקטיבי" להשוואה אמיתית בין שתי העבודות. הנתונים נשמרים בענן (Supabase) עם הזדהות והרשאות לכל משתמש.
+לוח בקרה בסגנון bento, לוח חודשי עם מפת חום, ניכוי הפסקה לא בתשלום, מצב בהיר/כהה, דוח PDF חודשי, ייצוא ל-CSV ו-JSON, תמיכה במשמרות לילה שחוצות חצות, ומדד "שכר שעתי אפקטיבי" להשוואה אמיתית בין שתי העבודות. הנתונים נשמרים בענן (Supabase) עם הזדהות והרשאות לכל משתמש.
 
 ---
 

@@ -51,14 +51,15 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
               <Tooltip
                 cursor={{ fill: 'rgba(99, 102, 241, 0.06)' }}
                 contentStyle={{
-                  background: '#ffffff',
-                  border: '1px solid #e5e7f0',
+                  background: 'rgb(var(--c-surface))',
+                  border: '1px solid rgb(var(--c-line))',
                   borderRadius: 12,
                   fontSize: 12,
                   direction: 'rtl',
-                  boxShadow: '0 8px 24px -8px rgba(15, 16, 32, 0.15)',
+                  boxShadow: '0 8px 24px -8px rgba(0, 0, 0, 0.25)',
                 }}
-                labelStyle={{ color: '#8a8fa8' }}
+                labelStyle={{ color: 'rgb(var(--c-muted))' }}
+                itemStyle={{ color: 'rgb(var(--c-body))' }}
                 formatter={(value: number, name: string) => [fmtIls(value), name]}
                 labelFormatter={(v: string) => fmtDateShort(v)}
               />

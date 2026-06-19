@@ -1,11 +1,12 @@
 import { t } from '../../strings'
 import { fmtIls, cn } from '../../lib/utils'
-import { weekAgg, monthAgg, pctDelta } from '../../lib/calc'
+import { weekAgg, monthAgg, pctDelta, weeklyWeddingTips } from '../../lib/calc'
 import { useCountUp } from '../../hooks/useCountUp'
 import type { Shift } from '../../types'
 
 export function WeekTile({ shifts }: { shifts: Shift[] }) {
   const agg = weekAgg(shifts)
+  const weddingTips = weeklyWeddingTips(shifts)
   const animatedTotal = useCountUp(agg.total)
   return (
     <div className="tile p-5 relative overflow-hidden">
@@ -25,6 +26,11 @@ export function WeekTile({ shifts }: { shifts: Shift[] }) {
           {agg.effectiveRate > 0 && (
             <span className="chip chip-sky px-2 py-0.5 tabular-nums text-[10px]">
               {fmtIls(agg.effectiveRate)}{t.common.perHour}
+            </span>
+          )}
+          {weddingTips > 0 && (
+            <span className="chip chip-indigo px-2 py-0.5 tabular-nums text-[10px]">
+              {t.job.weddingShort} · {t.tile.tips} {fmtIls(weddingTips)}
             </span>
           )}
         </div>

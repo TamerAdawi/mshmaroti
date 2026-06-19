@@ -60,6 +60,13 @@ export function weekAgg(shifts: Shift[]): Aggregate {
   return aggregate(filterByDateRange(shifts, startOfWeekIso()))
 }
 
+/** Total tips from wedding-hall shifts in the current week (Sun-based). */
+export function weeklyWeddingTips(shifts: Shift[]): number {
+  return filterByDateRange(shifts, startOfWeekIso())
+    .filter((s) => s.jobType === 'wedding')
+    .reduce((sum, s) => sum + s.tips, 0)
+}
+
 export function monthAgg(shifts: Shift[], offset = 0): Aggregate {
   return aggregate(filterByDateRange(shifts, startOfMonthIso(offset), endOfMonthIso(offset)))
 }

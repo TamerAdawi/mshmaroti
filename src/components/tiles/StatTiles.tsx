@@ -1,7 +1,8 @@
 import { t } from '../../strings'
 import { fmtIls, cn } from '../../lib/utils'
-import { weekAgg, monthAgg, pctDelta, weeklyWeddingTips } from '../../lib/calc'
+import { weekAgg, monthAgg, pctDelta, weeklyWeddingTips, monthlyIncomeByJob } from '../../lib/calc'
 import { useCountUp } from '../../hooks/useCountUp'
+import { useSettings } from '../../hooks/useSettings'
 import type { Shift } from '../../types'
 
 export function WeekTile({ shifts }: { shifts: Shift[] }) {
@@ -40,11 +41,13 @@ export function WeekTile({ shifts }: { shifts: Shift[] }) {
 }
 
 export function MonthTile({ shifts }: { shifts: Shift[] }) {
+  const [settings] = useSettings()
   const curr = monthAgg(shifts, 0)
   const prev = monthAgg(shifts, -1)
   const delta = pctDelta(curr.total, prev.total)
   const isPositive = delta !== null && delta >= 0
   const animatedTotal = useCountUp(curr.total)
+  const income = monthlyIncomeByJob(shifts, 0)
 
   return (
     <div className="tile p-5 relative overflow-hidden">
@@ -80,6 +83,20 @@ export function MonthTile({ shifts }: { shifts: Shift[] }) {
             </span>
           )}
         </div>
+        {(income.wedding > 0 || income.hourly > 0) && (
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            {income.wedding > 0 && (
+              <span className="chip chip-indigo px-2 py-0.5 tabular-nums text-[10px]">
+                {settings.weddingName} {fmtIls(income.wedding)}
+              </span>
+            )}
+            {income.hourly > 0 && (
+              <span className="chip chip-coral px-2 py-0.5 tabular-nums text-[10px]">
+                {settings.hourlyName} {fmtIls(income.hourly)}
+              </span>
+            )}
+          </div>
+        )}
         {prev.total > 0 && (
           <div className="text-[11px] text-muted mt-1">
             {t.tile.lastMonth}: {fmtIls(prev.total)}

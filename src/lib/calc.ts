@@ -71,6 +71,23 @@ export function monthAgg(shifts: Shift[], offset = 0): Aggregate {
   return aggregate(filterByDateRange(shifts, startOfMonthIso(offset), endOfMonthIso(offset)))
 }
 
+export interface MonthlyIncomeByJob {
+  wedding: number
+  hourly: number
+}
+
+/** Gross income (shift totals) per job for a given month offset (0 = current). */
+export function monthlyIncomeByJob(shifts: Shift[], offset = 0): MonthlyIncomeByJob {
+  const inMonth = filterByDateRange(shifts, startOfMonthIso(offset), endOfMonthIso(offset))
+  let wedding = 0
+  let hourly = 0
+  for (const s of inMonth) {
+    if (s.jobType === 'wedding') wedding += s.total
+    else hourly += s.total
+  }
+  return { wedding, hourly }
+}
+
 export interface JobSplit {
   wedding: Aggregate
   hourly: Aggregate

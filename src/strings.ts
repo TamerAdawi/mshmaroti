@@ -84,6 +84,7 @@ export const t = {
     hoursRequired: 'יש להזין שעות',
     hoursInvalid: 'מספר שעות לא תקין',
     tipsInvalid: 'סכום לא תקין',
+    saveFailed: 'שמירת המשמרת נכשלה. נסה שוב.',
   },
 
   // History

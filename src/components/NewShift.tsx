@@ -139,6 +139,9 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
         await addShift(payload)
       }
       onDone()
+    } catch (err) {
+      console.error('Failed to save shift:', err)
+      setError(t.form.saveFailed)
     } finally {
       setSubmitting(false)
     }

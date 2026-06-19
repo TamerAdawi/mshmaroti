@@ -42,6 +42,16 @@ async function requireUserId(): Promise<string> {
   return data.user.id
 }
 
+/**
+ * True when a write failed only because the `break_minutes` column hasn't been
+ * added yet (migration_v2.3.sql not run). Lets us degrade gracefully on older DBs.
+ * 42703 = undefined_column (Postgres); PGRST204 = column missing from schema cache.
+ */
+function isMissingBreakColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  return error.code === '42703' || /break_minutes/i.test(error.message ?? '')
+}
+
 // ====================================================================
 // CRUD operations — same signatures as the old db.ts.
 // total is computed app-side from base + tips before insert.
@@ -55,27 +65,32 @@ export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>)
   const total = input.jobType === 'wedding'
     ? input.base + input.tips
     : Math.max(input.base, input.tips)
-  const { data, error } = await supabase
-    .from('shifts')
-    .insert({
-      user_id,
-      date: input.date,
-      job_type: input.jobType,
-      hours: input.hours,
-      break_minutes: input.breakMinutes ?? 0,
-      start_time: input.startTime ?? null,
-      end_time: input.endTime ?? null,
-      base: input.base,
-      tips: input.tips,
-      expenses: input.expenses ?? 0,
-      total,
-      rate_multiplier: input.rateMultiplier ?? 1.0,
-      notes: input.notes ?? null,
-    })
-    .select('id')
-    .single()
-  if (error) throw error
-  return data.id
+  const row: Record<string, unknown> = {
+    user_id,
+    date: input.date,
+    job_type: input.jobType,
+    hours: input.hours,
+    start_time: input.startTime ?? null,
+    end_time: input.endTime ?? null,
+    base: input.base,
+    tips: input.tips,
+    expenses: input.expenses ?? 0,
+    total,
+    rate_multiplier: input.rateMultiplier ?? 1.0,
+    notes: input.notes ?? null,
+  }
+  // Only write break_minutes when there's an actual break, so saves still work
+  // on databases that haven't run migration_v2.3.sql yet.
+  if ((input.breakMinutes ?? 0) > 0) row.break_minutes = input.breakMinutes
+
+  let res = await supabase.from('shifts').insert(row).select('id').single()
+  if (res.error && 'break_minutes' in row && isMissingBreakColumn(res.error)) {
+    console.warn('break_minutes column missing — saving without it. Run supabase/migration_v2.3.sql to enable break tracking.')
+    delete row.break_minutes
+    res = await supabase.from('shifts').insert(row).select('id').single()
+  }
+  if (res.error) throw res.error
+  return res.data.id
 }
 
 export async function updateShift(
@@ -87,7 +102,8 @@ export async function updateShift(
   if (patch.date !== undefined) updates.date = patch.date
   if (patch.jobType !== undefined) updates.job_type = patch.jobType
   if (patch.hours !== undefined) updates.hours = patch.hours
-  if (patch.breakMinutes !== undefined) updates.break_minutes = patch.breakMinutes
+  // Only write break_minutes when > 0 (keeps saves working pre-migration_v2.3).
+  if (patch.breakMinutes !== undefined && patch.breakMinutes > 0) updates.break_minutes = patch.breakMinutes
   if (patch.startTime !== undefined) updates.start_time = patch.startTime ?? null
   if (patch.endTime !== undefined) updates.end_time = patch.endTime ?? null
   if (patch.base !== undefined) updates.base = patch.base
@@ -112,8 +128,13 @@ export async function updateShift(
       : Math.max(newBase, newTips)
   }
 
-  const { error } = await supabase.from('shifts').update(updates).eq('id', id)
-  if (error) throw error
+  let res = await supabase.from('shifts').update(updates).eq('id', id)
+  if (res.error && 'break_minutes' in updates && isMissingBreakColumn(res.error)) {
+    console.warn('break_minutes column missing — saving without it. Run supabase/migration_v2.3.sql to enable break tracking.')
+    delete updates.break_minutes
+    res = await supabase.from('shifts').update(updates).eq('id', id)
+  }
+  if (res.error) throw res.error
 }
 
 export async function deleteShift(id: number): Promise<void> {
@@ -142,25 +163,34 @@ export async function bulkImport(shifts: Shift[]): Promise<void> {
   // Clear existing first to match v1.x bulkImport semantics
   await clearAll()
   if (shifts.length === 0) return
-  const rows = shifts.map((s) => ({
-    user_id,
-    date: s.date,
-    job_type: s.jobType,
-    hours: s.hours,
-    break_minutes: s.breakMinutes ?? 0,
-    start_time: s.startTime ?? null,
-    end_time: s.endTime ?? null,
-    base: s.base,
-    tips: s.tips,
-    expenses: s.expenses ?? 0,
-    total: s.total,
-    rate_multiplier: s.rateMultiplier ?? 1.0,
-    notes: s.notes ?? null,
-  }))
+  const rows = shifts.map((s) => {
+    const row: Record<string, unknown> = {
+      user_id,
+      date: s.date,
+      job_type: s.jobType,
+      hours: s.hours,
+      start_time: s.startTime ?? null,
+      end_time: s.endTime ?? null,
+      base: s.base,
+      tips: s.tips,
+      expenses: s.expenses ?? 0,
+      total: s.total,
+      rate_multiplier: s.rateMultiplier ?? 1.0,
+      notes: s.notes ?? null,
+    }
+    if ((s.breakMinutes ?? 0) > 0) row.break_minutes = s.breakMinutes
+    return row
+  })
   // Chunk to stay under any payload limits (Supabase handles up to ~1MB easily)
   const CHUNK = 500
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await supabase.from('shifts').insert(rows.slice(i, i + CHUNK))
+    const chunk = rows.slice(i, i + CHUNK)
+    let { error } = await supabase.from('shifts').insert(chunk)
+    if (error && chunk.some((r) => 'break_minutes' in r) && isMissingBreakColumn(error)) {
+      console.warn('break_minutes column missing — importing without it. Run supabase/migration_v2.3.sql to enable break tracking.')
+      for (const r of chunk) delete r.break_minutes
+      ;({ error } = await supabase.from('shifts').insert(chunk))
+    }
     if (error) throw error
   }
 }

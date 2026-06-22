@@ -26,11 +26,11 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
           {hasData && (
             <div className="flex items-center gap-2 text-[11px] text-body">
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-sm" style={{ background: '#6366f1' }} />
+                <span className="w-2 h-2 rounded-sm" style={{ background: '#606c38' }} />
                 {settings.weddingName}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-sm" style={{ background: '#fb7185' }} />
+                <span className="w-2 h-2 rounded-sm" style={{ background: '#bc6c25' }} />
                 {settings.hourlyName}
               </span>
             </div>
@@ -41,7 +41,7 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
             <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#8a8fa8', fontSize: 10 }}
+                tick={{ fill: 'rgb(var(--c-muted))', fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 interval={6}
@@ -49,7 +49,7 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
                 reversed
               />
               <Tooltip
-                cursor={{ fill: 'rgba(99, 102, 241, 0.06)' }}
+                cursor={{ fill: 'rgba(96, 108, 56, 0.08)' }}
                 contentStyle={{
                   background: 'rgb(var(--c-surface))',
                   border: '1px solid rgb(var(--c-line))',
@@ -63,8 +63,8 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
                 formatter={(value: number, name: string) => [fmtIls(value), name]}
                 labelFormatter={(v: string) => fmtDateShort(v)}
               />
-              <Bar dataKey="wedding" stackId="a" fill="#6366f1" name={settings.weddingName} isAnimationActive animationDuration={700} />
-              <Bar dataKey="hourly" stackId="a" fill="#fb7185" name={settings.hourlyName} radius={[4, 4, 0, 0]} isAnimationActive animationDuration={700} />
+              <Bar dataKey="wedding" stackId="a" fill="#606c38" name={settings.weddingName} isAnimationActive animationDuration={700} />
+              <Bar dataKey="hourly" stackId="a" fill="#bc6c25" name={settings.hourlyName} radius={[4, 4, 0, 0]} isAnimationActive animationDuration={700} />
             </BarChart>
           </ResponsiveContainer>
         </div>

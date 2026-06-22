@@ -5,8 +5,8 @@ import { jobSplit } from '../../lib/calc'
 import type { Shift } from '../../types'
 import { useSettings } from '../../hooks/useSettings'
 
-const WEDDING_COLOR = '#6366f1' // indigo
-const HOURLY_COLOR = '#fb7185' // coral
+const WEDDING_COLOR = '#606c38' // olive
+const HOURLY_COLOR = '#bc6c25' // burnt orange
 
 export default function SplitTile({ shifts }: { shifts: Shift[] }) {
   const split = jobSplit(shifts)

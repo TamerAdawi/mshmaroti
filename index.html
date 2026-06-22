@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#fafbff" />
+    <meta name="theme-color" content="#fefae0" />
     <meta name="description" content="מעקב משמרות וטיפים — משמרותי" />
     <script>
       // Apply the saved theme before first paint to avoid a flash of the wrong theme.
@@ -14,7 +14,7 @@
           var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
           document.documentElement.classList.toggle('dark', dark)
           var meta = document.querySelector('meta[name="theme-color"]')
-          if (meta) meta.setAttribute('content', dark ? '#0b0c18' : '#fafbff')
+          if (meta) meta.setAttribute('content', dark ? '#1a2110' : '#fefae0')
         } catch (e) {}
       })()
     </script>

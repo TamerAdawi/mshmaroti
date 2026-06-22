@@ -5,29 +5,29 @@
 @layer base {
   :root {
     color-scheme: light;
-    /* Neutral palette (RGB triplets, consumed via rgb(var(--x) / a)) */
-    --c-bg: 250 251 255;
+    /* Earthy neutral palette (RGB triplets, consumed via rgb(var(--x) / a)) */
+    --c-bg: 254 250 224;        /* #fefae0 cream */
     --c-surface: 255 255 255;
-    --c-elevate: 244 245 251;
-    --c-line: 229 231 240;
-    --c-line-soft: 238 240 247;
-    --c-ink: 15 16 32;
-    --c-body: 61 66 88;
-    --c-muted: 138 143 168;
-    --c-muted-soft: 184 189 208;
+    --c-elevate: 245 238 214;
+    --c-line: 230 220 192;
+    --c-line-soft: 240 232 208;
+    --c-ink: 40 54 24;          /* #283618 dark green */
+    --c-body: 74 80 53;
+    --c-muted: 138 130 95;
+    --c-muted-soft: 184 172 138;
   }
 
   .dark {
     color-scheme: dark;
-    --c-bg: 11 12 24;
-    --c-surface: 23 25 43;
-    --c-elevate: 32 34 56;
-    --c-line: 44 47 73;
-    --c-line-soft: 35 37 60;
-    --c-ink: 237 238 248;
-    --c-body: 185 190 214;
-    --c-muted: 140 146 176;
-    --c-muted-soft: 92 98 124;
+    --c-bg: 26 33 16;           /* deep green */
+    --c-surface: 40 51 24;
+    --c-elevate: 52 64 32;
+    --c-line: 63 76 38;
+    --c-line-soft: 49 60 28;
+    --c-ink: 254 250 224;       /* #fefae0 cream text */
+    --c-body: 214 206 172;
+    --c-muted: 160 152 116;
+    --c-muted-soft: 110 104 78;
   }
 
   html,
@@ -40,9 +40,9 @@
     @apply bg-bg text-ink font-sans antialiased;
     font-feature-settings: 'kern';
     background-image:
-      radial-gradient(ellipse 80% 50% at 100% 0%, rgba(168, 85, 247, 0.08), transparent 60%),
-      radial-gradient(ellipse 70% 40% at 0% 100%, rgba(99, 102, 241, 0.06), transparent 60%),
-      radial-gradient(ellipse 60% 30% at 50% 50%, rgba(251, 113, 133, 0.04), transparent 60%);
+      radial-gradient(ellipse 80% 50% at 100% 0%, rgba(221, 161, 94, 0.10), transparent 60%),
+      radial-gradient(ellipse 70% 40% at 0% 100%, rgba(96, 108, 56, 0.08), transparent 60%),
+      radial-gradient(ellipse 60% 30% at 50% 50%, rgba(188, 108, 37, 0.05), transparent 60%);
     background-attachment: fixed;
     min-height: 100dvh;
   }
@@ -57,8 +57,8 @@
   }
 
   ::selection {
-    background: rgba(168, 85, 247, 0.25);
-    color: #0f1020;
+    background: rgba(96, 108, 56, 0.25);
+    color: #283618;
   }
 }
 
@@ -73,8 +73,8 @@
 
   .tile-hero {
     @apply relative rounded-2xl overflow-hidden text-white;
-    background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-    box-shadow: 0 20px 40px -12px rgba(168, 85, 247, 0.35);
+    background: linear-gradient(135deg, #606c38 0%, #dda15e 55%, #bc6c25 100%);
+    box-shadow: 0 20px 40px -12px rgba(188, 108, 37, 0.35);
   }
   .tile-hero::before {
     content: '';
@@ -107,7 +107,7 @@
   }
   .input-field:focus {
     border-color: theme('colors.indigo.DEFAULT');
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+    box-shadow: 0 0 0 4px rgba(96, 108, 56, 0.16);
   }
   .input-field::placeholder {
     color: rgb(var(--c-muted-soft));
@@ -115,8 +115,8 @@
 
   .btn-primary {
     @apply rounded-xl px-5 py-3 font-bold text-white transition active:scale-[0.98];
-    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-    box-shadow: 0 8px 20px -6px rgba(99, 102, 241, 0.45);
+    background: linear-gradient(135deg, #606c38 0%, #bc6c25 100%);
+    box-shadow: 0 8px 20px -6px rgba(96, 108, 56, 0.45);
   }
   .btn-primary:disabled {
     opacity: 0.5;
@@ -134,7 +134,7 @@
   .btn-danger {
     @apply rounded-xl px-5 py-3 font-semibold transition text-coral-deep active:scale-[0.98];
     background: theme('colors.coral.soft');
-    border: 1px solid rgba(251, 113, 133, 0.25);
+    border: 1px solid rgba(188, 108, 37, 0.25);
   }
 
   .chip {
@@ -144,44 +144,44 @@
     background: rgb(var(--c-surface));
   }
   .chip-active {
-    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    background: linear-gradient(135deg, #606c38 0%, #bc6c25 100%);
     border-color: transparent;
     color: #fff;
   }
 
   .chip-indigo {
     background: theme('colors.indigo.soft');
-    border-color: rgba(99, 102, 241, 0.2);
+    border-color: rgba(96, 108, 56, 0.25);
     color: theme('colors.indigo.deep');
   }
   .chip-lime {
     background: theme('colors.lime.soft');
-    border-color: rgba(132, 204, 22, 0.25);
+    border-color: rgba(111, 125, 51, 0.3);
     color: theme('colors.lime.deep');
   }
   .chip-coral {
     background: theme('colors.coral.soft');
-    border-color: rgba(251, 113, 133, 0.25);
+    border-color: rgba(188, 108, 37, 0.3);
     color: theme('colors.coral.deep');
   }
   .chip-sky {
     background: theme('colors.sky.soft');
-    border-color: rgba(14, 165, 233, 0.2);
+    border-color: rgba(185, 130, 58, 0.3);
     color: theme('colors.sky.deep');
   }
   .chip-peach {
     background: theme('colors.peach.soft');
-    border-color: rgba(251, 146, 60, 0.25);
+    border-color: rgba(221, 161, 94, 0.35);
     color: theme('colors.peach.deep');
   }
   .chip-violet {
     background: theme('colors.violet.soft');
-    border-color: rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 95, 42, 0.3);
     color: theme('colors.violet.deep');
   }
 
   .text-gradient {
-    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    background: linear-gradient(135deg, #606c38 0%, #bc6c25 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -190,15 +190,15 @@
 
 /* ---------- Dark mode polish ---------- */
 /* Soft accent tints are light by design; swap to translucent fills on dark. */
-.dark .chip-indigo { background: rgba(99, 102, 241, 0.18); color: #c7d2fe; border-color: rgba(99, 102, 241, 0.35); }
-.dark .chip-lime { background: rgba(132, 204, 22, 0.18); color: #d9f99d; border-color: rgba(132, 204, 22, 0.35); }
-.dark .chip-coral { background: rgba(251, 113, 133, 0.18); color: #fecdd3; border-color: rgba(251, 113, 133, 0.35); }
-.dark .chip-sky { background: rgba(14, 165, 233, 0.18); color: #bae6fd; border-color: rgba(14, 165, 233, 0.35); }
-.dark .chip-peach { background: rgba(251, 146, 60, 0.18); color: #fed7aa; border-color: rgba(251, 146, 60, 0.35); }
-.dark .chip-violet { background: rgba(168, 85, 247, 0.18); color: #e9d5ff; border-color: rgba(168, 85, 247, 0.35); }
-.dark .btn-danger { background: rgba(251, 113, 133, 0.15); color: #fecdd3; border-color: rgba(251, 113, 133, 0.3); }
-.dark .bg-hero-soft { background-image: linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(168, 85, 247, 0.12) 60%, rgba(236, 72, 153, 0.12) 100%); }
-.dark .bg-violet-soft\/60 { background-color: rgba(168, 85, 247, 0.12) !important; }
+.dark .chip-indigo { background: rgba(96, 108, 56, 0.22); color: #cdd6a8; border-color: rgba(96, 108, 56, 0.4); }
+.dark .chip-lime { background: rgba(111, 125, 51, 0.22); color: #d6e0a8; border-color: rgba(111, 125, 51, 0.4); }
+.dark .chip-coral { background: rgba(188, 108, 37, 0.2); color: #e9c39a; border-color: rgba(188, 108, 37, 0.4); }
+.dark .chip-sky { background: rgba(185, 130, 58, 0.2); color: #e7cda0; border-color: rgba(185, 130, 58, 0.4); }
+.dark .chip-peach { background: rgba(221, 161, 94, 0.2); color: #f0d6ad; border-color: rgba(221, 161, 94, 0.4); }
+.dark .chip-violet { background: rgba(168, 95, 42, 0.2); color: #e6c2a0; border-color: rgba(168, 95, 42, 0.4); }
+.dark .btn-danger { background: rgba(188, 74, 30, 0.18); color: #e9b79a; border-color: rgba(188, 74, 30, 0.35); }
+.dark .bg-hero-soft { background-image: linear-gradient(135deg, rgba(96, 108, 56, 0.18) 0%, rgba(221, 161, 94, 0.12) 60%, rgba(188, 108, 37, 0.12) 100%); }
+.dark .bg-violet-soft\/60 { background-color: rgba(168, 95, 42, 0.14) !important; }
 .dark .tile { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
 
 /* ---------- Motion ---------- */

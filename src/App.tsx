@@ -4,6 +4,7 @@ import { cn } from './lib/utils'
 import { useTheme } from './hooks/useTheme'
 import { resolveDark } from './lib/theme'
 import { AuthProvider, useAuth } from './lib/auth'
+import Logo from './components/Logo'
 import AuthScreen from './components/AuthScreen'
 import Dashboard from './components/Dashboard'
 import NewShift from './components/NewShift'
@@ -28,9 +29,7 @@ function AuthGate() {
   if (loading) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
-        <div className="w-12 h-12 rounded-full bg-hero-gradient flex items-center justify-center shadow-glow animate-pulse">
-          <span className="font-display font-extrabold text-white text-2xl">מ</span>
-        </div>
+        <Logo className="w-16 h-16 shadow-glow animate-pulse" />
       </div>
     )
   }
@@ -58,7 +57,7 @@ function AppShell() {
     <div className="min-h-dvh flex flex-col safe-top">
       <header className="px-5 pt-4 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-3xl font-extrabold text-gradient">{t.appName}</h1>
+          <Logo className="h-12 w-12" />
           <div className="flex items-center gap-3">
             <span className="label">{t.tagline}</span>
             <ThemeToggle />

@@ -12,7 +12,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['Logo.png'],
       manifest: {
         name: 'משמרותי',
         short_name: 'משמרותי',
@@ -25,9 +25,8 @@ export default defineConfig({
         start_url: base,
         scope: base,
         icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'Logo.png', sizes: '2000x2000', type: 'image/png' },
+          { src: 'Logo.png', sizes: '2000x2000', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

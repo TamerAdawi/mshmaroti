@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
+import Logo from './Logo'
 import { t } from '../strings'
 
 type Mode = 'signin' | 'signup'
@@ -58,14 +59,9 @@ export default function AuthScreen() {
     <div className="min-h-dvh flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-md">
         {/* Branding */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-hero-gradient flex items-center justify-center shadow-glow">
-            <span className="font-display font-extrabold text-white text-3xl">מ</span>
-          </div>
-          <div>
-            <h1 className="font-display text-3xl font-extrabold text-gradient">{t.appName}</h1>
-            <p className="text-xs text-muted mt-0.5">{t.tagline}</p>
-          </div>
+        <div className="flex flex-col items-center mb-8">
+          <Logo className="w-28 h-28 shadow-glow" />
+          <p className="text-xs text-muted mt-3">{t.tagline}</p>
         </div>
 
         <div className="tile p-6">

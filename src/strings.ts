@@ -223,6 +223,16 @@ export const t = {
     colExpenses: 'הוצאות',
     colTotal: 'סך הכל',
     colNotes: 'הערות',
+    // Per-job report + restaurant hour tiers
+    selectJob: 'עבודה בדוח',
+    jobAll: 'שתיהן',
+    includeHourTiers: 'פירוט שעות נוספות (125/150/175/200%)',
+    hourTiersTitle: 'פירוט שעות',
+    days: 'ימים',
+    regularHours: 'שעות רגילות',
+    overtimeHours: 'שעות נוספות',
+    manualMultiplier: 'מכפיל ידני',
+    mandatoryDeductions: 'ניכויי חובה',
     page: 'עמוד',
   },
 } as const

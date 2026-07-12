@@ -30,10 +30,12 @@ export default function Report() {
   const shifts = useAllShifts()
   const [settings] = useSettings()
   const [offset, setOffset] = useState(0)
-  const [opts, setOpts] = useState<Omit<ReportOptions, 'monthOffset'>>({
+  const [job, setJob] = useState<'all' | 'wedding' | 'hourly'>('all')
+  const [opts, setOpts] = useState<Omit<ReportOptions, 'monthOffset' | 'job'>>({
     includeSummary: true,
     includeJobBreakdown: true,
     includeDeductions: true,
+    includeHourTiers: true,
     includeEffectiveRate: true,
     includeShifts: true,
     includeTimes: true,
@@ -49,9 +51,10 @@ export default function Report() {
 
   const preview = useMemo(() => {
     if (!shifts) return null
-    const inMonth = filterByDateRange(shifts, selected.from, selected.to)
+    let inMonth = filterByDateRange(shifts, selected.from, selected.to)
+    if (job !== 'all') inMonth = inMonth.filter((s) => s.jobType === job)
     return { agg: aggregate(inMonth), count: inMonth.length }
-  }, [shifts, selected])
+  }, [shifts, selected, job])
 
   const toggle = (key: keyof typeof opts) => setOpts((o) => ({ ...o, [key]: !o[key] }))
 
@@ -60,8 +63,9 @@ export default function Report() {
     setGenerating(true)
     setError(null)
     try {
-      const blob = await generateReport(shifts, settings, { monthOffset: offset, ...opts })
-      const filename = `mshmaroti-report-${selected.from.slice(0, 7)}.pdf`
+      const blob = await generateReport(shifts, settings, { monthOffset: offset, job, ...opts })
+      const jobTag = job === 'all' ? '' : `-${job}`
+      const filename = `mshmaroti-report-${selected.from.slice(0, 7)}${jobTag}.pdf`
       downloadBlob(blob, filename)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'שגיאה')
@@ -78,6 +82,16 @@ export default function Report() {
         <h2 className="font-display text-2xl font-bold text-gradient inline-block">{t.report.title}</h2>
         <p className="text-xs text-muted mt-1">{t.report.subtitle}</p>
       </div>
+
+      {/* Job selector — separate report per job */}
+      <section className="tile p-5">
+        <div className="label mb-3">{t.report.selectJob}</div>
+        <div className="grid grid-cols-3 gap-2">
+          <JobBtn active={job === 'all'} onClick={() => setJob('all')} label={t.report.jobAll} />
+          <JobBtn active={job === 'wedding'} onClick={() => setJob('wedding')} label={settings.weddingName} />
+          <JobBtn active={job === 'hourly'} onClick={() => setJob('hourly')} label={settings.hourlyName} />
+        </div>
+      </section>
 
       {/* Month picker */}
       <section className="tile p-5">
@@ -129,9 +143,16 @@ export default function Report() {
       <section className="tile p-5 space-y-2">
         <div className="label mb-2">{t.report.include}</div>
         <ToggleRow label={t.report.includeSummary} checked={opts.includeSummary} onChange={() => toggle('includeSummary')} />
-        <ToggleRow label={t.report.includeJobBreakdown} checked={opts.includeJobBreakdown} onChange={() => toggle('includeJobBreakdown')} />
+        {job === 'all' && (
+          <ToggleRow label={t.report.includeJobBreakdown} checked={opts.includeJobBreakdown} onChange={() => toggle('includeJobBreakdown')} />
+        )}
         <ToggleRow label={t.report.includeDeductions} checked={opts.includeDeductions} onChange={() => toggle('includeDeductions')} />
-        <ToggleRow label={t.report.includeEffectiveRate} checked={opts.includeEffectiveRate} onChange={() => toggle('includeEffectiveRate')} />
+        {job !== 'wedding' && (
+          <ToggleRow label={t.report.includeHourTiers} checked={opts.includeHourTiers} onChange={() => toggle('includeHourTiers')} />
+        )}
+        {job === 'all' && (
+          <ToggleRow label={t.report.includeEffectiveRate} checked={opts.includeEffectiveRate} onChange={() => toggle('includeEffectiveRate')} />
+        )}
         <ToggleRow label={t.report.includeShifts} checked={opts.includeShifts} onChange={() => toggle('includeShifts')} />
         {opts.includeShifts && (
           <div className="pr-4 border-r-2 border-line mr-1 space-y-2 mt-2">
@@ -165,6 +186,22 @@ export default function Report() {
         )}
       </button>
     </div>
+  )
+}
+
+function JobBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'rounded-xl px-3 py-3 text-sm font-semibold transition border-2 truncate',
+        active
+          ? 'bg-indigo-soft border-indigo/40 text-indigo-deep'
+          : 'bg-surface border-line text-body hover:border-mutedSoft',
+      )}
+    >
+      {label}
+    </button>
   )
 }
 

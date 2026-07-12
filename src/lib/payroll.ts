@@ -315,3 +315,83 @@ export function calcMonthlyBreakdown(
     totalShifts: weddingShifts + hourlyShifts,
   }
 }
+
+// ===================================================================
+// Restaurant hours by effective multiplier (for the report)
+// Buckets each paid hour by its effective rate: 100% / 125% / 150% /
+// 175% / 200%, mirroring calcShiftPay's tiering (OT tiers + rest-day
+// +0.5). Shifts with a manual rate_multiplier are reported separately.
+// This is additive — it does not change calcShiftPay.
+// ===================================================================
+
+export interface RestaurantTierHours {
+  days: number          // distinct restaurant shift-dates
+  shifts: number
+  totalHours: number
+  h100: number          // ×1.0
+  h125: number          // ×1.25
+  h150: number          // ×1.5 (OT tier 2, or rest-day base)
+  h175: number          // ×1.75 (rest-day OT tier 1)
+  h200: number          // ×2.0 (rest-day OT tier 2)
+  overrideHours: number // hours on shifts with a manual rate_multiplier
+  overrides: { mult: number; hours: number }[]
+}
+
+export function monthlyRestaurantTiers(shifts: Shift[], settings: Settings): RestaurantTierHours {
+  const hourly = shifts.filter((s) => s.jobType === 'hourly')
+  const days = new Set(hourly.map((s) => s.date)).size
+  const threshold = settings.dailyHoursThreshold
+  let totalHours = 0
+  let h100 = 0, h125 = 0, h150 = 0, h175 = 0, h200 = 0, overrideHours = 0
+  const overrideMap = new Map<number, number>()
+
+  for (const s of hourly) {
+    totalHours += s.hours
+    const mult = s.rateMultiplier ?? 1.0
+    if (mult !== 1.0) {
+      overrideHours += s.hours
+      overrideMap.set(mult, (overrideMap.get(mult) ?? 0) + s.hours)
+      continue
+    }
+    const restDayHours = (s.startTime && s.endTime)
+      ? Math.min(calcRestDayOverlap(s.date, s.startTime, s.endTime), s.hours)
+      : 0
+    const segments = buildSegments(s, restDayHours)
+    let position = 0
+    for (const seg of segments) {
+      let remaining = seg.hours
+      while (remaining > 0.0001) {
+        let baseMult: number
+        let nextBoundary: number
+        if (position < threshold) {
+          baseMult = 1.0
+          nextBoundary = threshold
+        } else if (position < threshold + 2) {
+          baseMult = 1.25
+          nextBoundary = threshold + 2
+        } else {
+          baseMult = 1.5
+          nextBoundary = Infinity
+        }
+        const eff = baseMult + (seg.isRestDay ? 0.5 : 0)
+        const consume = Math.min(remaining, nextBoundary - position)
+        if (eff === 1.0) h100 += consume
+        else if (eff === 1.25) h125 += consume
+        else if (eff === 1.5) h150 += consume
+        else if (eff === 1.75) h175 += consume
+        else h200 += consume // eff === 2.0
+        position += consume
+        remaining -= consume
+      }
+    }
+  }
+
+  return {
+    days,
+    shifts: hourly.length,
+    totalHours,
+    h100, h125, h150, h175, h200,
+    overrideHours,
+    overrides: [...overrideMap.entries()].map(([mult, hours]) => ({ mult, hours })),
+  }
+}

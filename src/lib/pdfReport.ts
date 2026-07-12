@@ -4,14 +4,16 @@ import type { Shift } from '../types'
 import { HEBREW_FONT_REGULAR, HEBREW_FONT_BOLD } from './hebrewFont'
 import type { Settings } from './settings'
 import { aggregate, jobSplit, filterByDateRange } from './calc'
-import { calcMonthlyBreakdown } from './payroll'
+import { calcMonthlyBreakdown, monthlyRestaurantTiers } from './payroll'
 import { t } from '../strings'
 
 export interface ReportOptions {
   monthOffset: number // 0 = current, -1 = last month
+  job: 'all' | 'wedding' | 'hourly' // scope the report to one job (or both)
   includeSummary: boolean
   includeJobBreakdown: boolean
   includeDeductions: boolean
+  includeHourTiers: boolean
   includeEffectiveRate: boolean
   includeShifts: boolean
   includeTimes: boolean
@@ -20,18 +22,18 @@ export interface ReportOptions {
   includeNotes: boolean
 }
 
-// Brand colors (RGB for jsPDF)
+// Brand colors (RGB for jsPDF) — earthy palette
 const COLORS = {
-  indigo: [99, 102, 241] as [number, number, number],
-  violet: [168, 85, 247] as [number, number, number],
-  pink: [236, 72, 153] as [number, number, number],
-  coral: [251, 113, 133] as [number, number, number],
-  lime: [132, 204, 22] as [number, number, number],
-  ink: [15, 16, 32] as [number, number, number],
-  body: [61, 66, 88] as [number, number, number],
-  muted: [138, 143, 168] as [number, number, number],
-  line: [229, 231, 240] as [number, number, number],
-  bg: [250, 251, 255] as [number, number, number],
+  indigo: [96, 108, 56] as [number, number, number], // olive
+  violet: [221, 161, 94] as [number, number, number], // tan
+  pink: [188, 108, 37] as [number, number, number], // burnt orange
+  coral: [188, 108, 37] as [number, number, number], // burnt orange
+  lime: [111, 125, 51] as [number, number, number], // green
+  ink: [40, 54, 24] as [number, number, number], // dark green
+  body: [74, 80, 53] as [number, number, number],
+  muted: [138, 130, 95] as [number, number, number],
+  line: [230, 220, 192] as [number, number, number],
+  bg: [254, 250, 224] as [number, number, number], // cream
 }
 
 /** Reverse a string so jsPDF renders RTL Hebrew correctly. jsPDF doesn't support BiDi. */
@@ -81,7 +83,9 @@ export async function generateReport(
   options: ReportOptions,
 ): Promise<Blob> {
   const range = monthRange(options.monthOffset)
-  const filtered = filterByDateRange(shifts, range.from, range.to).sort((a, b) => {
+  let filtered = filterByDateRange(shifts, range.from, range.to)
+  if (options.job !== 'all') filtered = filtered.filter((s) => s.jobType === options.job)
+  filtered = filtered.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1
     return a.createdAt - b.createdAt
   })
@@ -109,10 +113,13 @@ export async function generateReport(
   doc.setFontSize(22)
   doc.text(rev('משמרותי'), pageW - marginX, 17, { align: 'right' })
 
-  // Subtitle
+  // Subtitle — job scope of this report
   doc.setFont('Hebrew', 'normal')
   doc.setFontSize(10)
-  doc.text(rev('דוח חודשי'), pageW - marginX, 25, { align: 'right' })
+  const subtitle = options.job === 'wedding' ? settings.weddingName
+    : options.job === 'hourly' ? settings.hourlyName
+    : 'דוח חודשי'
+  doc.text(rev(subtitle), pageW - marginX, 25, { align: 'right' })
 
   // Report period (left side)
   doc.setFontSize(9)
@@ -189,8 +196,8 @@ export async function generateReport(
     y += rowsUsed * (boxH + 2) + 6
   }
 
-  // ===== JOB BREAKDOWN =====
-  if (options.includeJobBreakdown) {
+  // ===== JOB BREAKDOWN (only when both jobs are in scope) =====
+  if (options.includeJobBreakdown && options.job === 'all') {
     sectionTitle(doc, rev('פילוח לפי עבודה'), marginX, y, pageW)
     y += 8
 
@@ -217,7 +224,7 @@ export async function generateReport(
       doc.setFont('Hebrew', 'normal')
       doc.setFontSize(9)
       doc.setTextColor(...COLORS.body)
-      const line = `${fmtPdfIls(job.agg.total)}  ·  ${fmtPdfHours(job.agg.hours)}  ·  ${job.agg.count} ${rev('משמרות')}`
+      const line = `${fmtPdfIls(job.agg.total)}   ${fmtPdfHours(job.agg.hours)}   ${job.agg.count} ${rev('משמרות')}`
       doc.text(line, pageW - marginX - 3, y + 13, { align: 'right' })
       // Effective rate chip
       doc.setTextColor(...job.color)
@@ -259,7 +266,10 @@ export async function generateReport(
         lines.push({ label: t.report.pension, value: `-${fmtPdfIls(breakdown.hourlyPension)}  (${(settings.pensionRate * 100).toFixed(1)}%)`, color: COLORS.coral })
       if (breakdown.hourlyTax > 0)
         lines.push({ label: t.report.incomeTax, value: `-${fmtPdfIls(breakdown.hourlyTax)}  (${(settings.incomeTaxRate * 100).toFixed(1)}%)`, color: COLORS.coral })
-      lines.push({ label: t.report.netWage, value: fmtPdfIls(breakdown.hourlyNet), color: COLORS.indigo, bold: true, rule: true })
+      const mandatory = breakdown.hourlyBituach + breakdown.hourlyPension + breakdown.hourlyTax
+      if (mandatory > 0)
+        lines.push({ label: t.report.mandatoryDeductions, value: `-${fmtPdfIls(mandatory)}`, color: COLORS.coral, rule: true })
+      lines.push({ label: t.report.netWage, value: fmtPdfIls(breakdown.hourlyNet), color: COLORS.indigo, bold: true })
     }
     if (breakdown.weddingShifts > 0) {
       lines.push({ header: settings.weddingName })
@@ -310,8 +320,67 @@ export async function generateReport(
     }
   }
 
-  // ===== EFFECTIVE RATE COMPARISON =====
-  if (options.includeEffectiveRate && split.wedding.effectiveRate > 0 && split.hourly.effectiveRate > 0) {
+  // ===== RESTAURANT HOUR TIERS (days, hours, OT/rest-day multipliers) =====
+  const tiers = monthlyRestaurantTiers(filtered, settings)
+  if (options.includeHourTiers && tiers.shifts > 0) {
+    if (y > 235) {
+      doc.addPage()
+      y = 20
+    }
+    sectionTitle(doc, rev(t.report.hourTiersTitle), marginX, y, pageW)
+    y += 8
+
+    interface TierLine { label: string; value: string; color?: [number, number, number]; bold?: boolean; rule?: boolean }
+    const rows: TierLine[] = [
+      { label: t.report.days, value: String(tiers.days) },
+      { label: t.report.shifts, value: String(tiers.shifts) },
+      { label: t.report.totalHours, value: fmtPdfHours(tiers.totalHours), bold: true },
+    ]
+    // Percentage lives in the LTR value (right-side Hebrew labels get reversed).
+    const tierDefs: Array<[number, string, number, [number, number, number]]> = [
+      [tiers.h100, t.report.regularHours, 100, COLORS.body],
+      [tiers.h125, t.report.overtimeHours, 125, COLORS.violet],
+      [tiers.h150, t.report.overtimeHours, 150, COLORS.coral],
+      [tiers.h175, t.report.overtimeHours, 175, COLORS.pink],
+      [tiers.h200, t.report.overtimeHours, 200, COLORS.pink],
+    ]
+    let firstTier = true
+    for (const [h, label, pct, color] of tierDefs) {
+      if (h <= 0.001) continue
+      rows.push({ label, value: `${fmtPdfHours(h)}  (${pct}%)`, color, rule: firstTier })
+      firstTier = false
+    }
+    if (tiers.overrideHours > 0.001) {
+      rows.push({ label: t.report.manualMultiplier, value: fmtPdfHours(tiers.overrideHours), color: COLORS.body, rule: firstTier })
+    }
+
+    const rowH = 7
+    const boxW = pageW - marginX * 2
+    const boxH = rows.length * rowH + 6
+    doc.setFillColor(...COLORS.bg)
+    doc.setDrawColor(...COLORS.line)
+    doc.roundedRect(marginX, y, boxW, boxH, 2, 2, 'FD')
+
+    let ly = y + 7
+    rows.forEach((ln) => {
+      if (ln.rule) {
+        doc.setDrawColor(...COLORS.line)
+        doc.setLineWidth(0.2)
+        doc.line(marginX + 4, ly - 4, marginX + boxW - 4, ly - 4)
+      }
+      doc.setTextColor(...COLORS.body)
+      doc.setFont('Hebrew', ln.bold ? 'bold' : 'normal')
+      doc.setFontSize(ln.bold ? 10 : 9)
+      doc.text(rev(ln.label), marginX + boxW - 4, ly, { align: 'right' })
+      doc.setTextColor(...(ln.color ?? COLORS.body))
+      doc.text(ln.value, marginX + 4, ly, { align: 'left' })
+      ly += rowH
+    })
+    y += boxH + 6
+  }
+
+  // ===== EFFECTIVE RATE COMPARISON (only when both jobs are in scope) =====
+  if (options.includeEffectiveRate && options.job === 'all' && split.wedding.effectiveRate > 0 && split.hourly.effectiveRate > 0) {
     sectionTitle(doc, rev('שכר שעתי אפקטיבי'), marginX, y, pageW)
     y += 8
 
@@ -485,15 +554,17 @@ function drawGradientBand(doc: jsPDF, x: number, y: number, w: number, h: number
     const t = i / strips
     let r: number, g: number, b: number
     if (t < 0.5) {
+      // olive #606c38 → tan #dda15e
       const u = t * 2
-      r = Math.round(99 + (168 - 99) * u)
-      g = Math.round(102 + (85 - 102) * u)
-      b = Math.round(241 + (247 - 241) * u)
+      r = Math.round(96 + (221 - 96) * u)
+      g = Math.round(108 + (161 - 108) * u)
+      b = Math.round(56 + (94 - 56) * u)
     } else {
+      // tan #dda15e → burnt orange #bc6c25
       const u = (t - 0.5) * 2
-      r = Math.round(168 + (236 - 168) * u)
-      g = Math.round(85 + (72 - 85) * u)
-      b = Math.round(247 + (153 - 247) * u)
+      r = Math.round(221 + (188 - 221) * u)
+      g = Math.round(161 + (108 - 161) * u)
+      b = Math.round(94 + (37 - 94) * u)
     }
     doc.setFillColor(r, g, b)
     doc.rect(x + i * sw, y, sw + 0.3, h, 'F')

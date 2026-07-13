@@ -1,202 +1,167 @@
 # משמרותי · Mshmaroti
 
-> A Hebrew-first, installable PWA for tracking waitressing shifts across two jobs — bento dashboard, Israeli labor-law payroll (overtime, rest-day, deductions), effective hourly-rate analytics, a monthly calendar heatmap, light/dark themes, and cloud sync.
+**A payroll-accurate shift tracker for two-job waitressing — it computes Israeli labour-law overtime, Shabbat premiums and deductions per shift, and tells you which job actually pays more per hour of your life.**
 
-**🔗 Live demo → [tameradawi.github.io/mshmaroti](https://tameradawi.github.io/mshmaroti/)**
+[![CI](https://github.com/TamerAdawi/mshmaroti/actions/workflows/ci.yml/badge.svg)](https://github.com/TamerAdawi/mshmaroti/actions/workflows/ci.yml)
+&nbsp;**Live demo → [tameradawi.github.io/mshmaroti](https://tameradawi.github.io/mshmaroti/)** (tap *"כניסה למצב הדגמה"* — no signup)
 
-![React](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06B6D4?logo=tailwindcss&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?logo=supabase&logoColor=white)
-![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white)
-
-[Live demo](https://tameradawi.github.io/mshmaroti/) · [Hebrew summary](#תקציר-בעברית) · [Highlights](#highlights) · [Development](#development) · [Supabase setup](#supabase-setup) · [Deploy](#deploy-to-github-pages)
+![Mshmaroti](public/og-image.png)
 
 ---
 
-## Why
+## Why it exists
 
-I work two waitressing jobs with different pay structures:
+I waitress two jobs with different pay structures: a wedding hall (flat rate per event + tips) and a
+restaurant (hourly, under Israeli labour law + tips). "Which one is worth my time?" is a genuinely hard
+question once overtime tiers, the Saturday-night rest-day premium, and deductions get involved. Napkin
+math doesn't cut it, and neither does a generic hours app that has never heard of *דמי הבראה* or the
+125%/150% overtime boundary. So the core of this app is a small payroll engine that gets the number right,
+and a dashboard built around a single comparison: **effective ₪/hour across both jobs.**
 
-- **Venue work** — a flat daily rate per shift regardless of hours, plus tips
-- **Hourly gig** — an hourly rate × hours worked, plus tips, subject to Israeli labor law
+## Stack
 
-Napkin math told me nothing about which job actually pays better _per hour of my life_. So I built this.
-
-**The key metric: effective ₪/hr across both jobs.** Flat-rate shifts are worth more when they're short; hourly shifts scale with time (and overtime, and rest-day premiums). This app answers — finally — which job to prioritize, and what I actually take home after deductions.
-
-## Highlights
-
-- **Bento-grid dashboard** — today (hero), week, month vs last month (% delta), effective-rate comparison, job split donut, hours-by-job, gross-vs-net breakdown, 30-day stacked trend, recent shifts
-- **Israeli labor-law payroll (hourly job)** — daily overtime tiers (×1.25 then ×1.5), a configurable weekly rest-day window with premium pay, and monthly deductions: Bituach Leumi, pension, income tax, plus a travel allowance. A per-shift rate multiplier can override the automatic calc.
-- **Tip law, handled** — venue pay is `base + tips`; hourly pay is `max(hourly wages, tips)` per Israeli tipping rules
-- **Two input modes** — start + end time (overnight-aware: `20:00 → 02:30` = 6.5h) or direct hours, with an **unpaid break (minutes)** that deducts from paid hours on the hourly job
-- **Monthly calendar heatmap** — browse any month, see earnings intensity per day, tap a day to filter
-- **Configurable rates & job names** — no hardcoded values; update in settings, past shifts preserve their computed pay
-- **PDF monthly reports** (jsPDF, Hebrew-aware) + **CSV export** (UTF-8 BOM so Excel opens Hebrew correctly) + full JSON backup/restore
-- **Cloud sync & multi-user** — Supabase auth (email/password or Google) with row-level security; realtime updates across devices
-- **Light & dark themes** — light / dark / system, with a one-tap toggle in the header and a no-flash theme load
-- **Installable PWA** — add to iOS/Android home screen; standalone fullscreen; offline shell cache
-- **True RTL** — locked Hebrew locale with proper logical-property layout, plus motion that respects `prefers-reduced-motion`
-
-## Tech
-
-| | |
+| Layer | Choice |
 |---|---|
-| Framework | React 18 + TypeScript + Vite |
-| Styling | Tailwind CSS (custom indigo/violet + pastel palette) |
-| Backend | Supabase (Postgres + Auth + Realtime, RLS-protected) |
-| Charts | Recharts |
-| PDF | jsPDF + jspdf-autotable |
-| PWA | `vite-plugin-pwa` (Workbox) |
-| Typography | Rubik (display) + Assistant (UI) |
-| Theming | Light / dark / system via CSS-variable tokens |
-| Deploy | GitHub Actions → GitHub Pages |
+| UI | React 18 + TypeScript 5.7 + Vite 6 |
+| Styling | Tailwind CSS 3.4 (CSS-variable tokens for light/dark), Rubik + Assistant |
+| Backend | Supabase (Postgres + Auth + Realtime, row-level security) |
+| Charts | Recharts 2.15 |
+| PDF | jsPDF + jspdf-autotable (hand-rolled RTL) |
+| PWA | vite-plugin-pwa (Workbox) |
+| Tests | Vitest 4 (33 tests over the pure payroll/calc/date logic) |
+| CI / deploy | GitHub Actions → typecheck + tests, and build → GitHub Pages |
+| Tooling | Playwright (headless, generates the marketing carousel + OG image) |
+
+## By the numbers
+
+- **~4,760 LOC** of app TypeScript/TSX, **~325 LOC** of tests
+- **16 components** (8 screens/shared + 8 dashboard tiles), **11 lib modules**, **4 hooks**
+- **2 Postgres tables** (`shifts`, `user_settings`), RLS on both
+- **33 unit tests** on the money math, running in CI on every push
 
 ## Architecture
 
 ```
 src/
-├─ types.ts              Shift type (base, tips, expenses, optional time + break, multiplier)
-├─ strings.ts            All Hebrew labels (i18n-ready structure)
-├─ lib/
-│  ├─ supabase.ts        Supabase client + DB row types
-│  ├─ api.ts             Shift CRUD + bulk import (snake_case ↔ camelCase mapping)
-│  ├─ auth.tsx           Auth provider (email/password, Google)
-│  ├─ settings.ts        Cloud-backed rates, job names & payroll parameters
-│  ├─ payroll.ts         Israeli labor law — OT tiers, rest-day window, monthly deductions
-│  ├─ calc.ts            Aggregations (today/week/month, job split, trend, daily totals)
-│  ├─ utils.ts           Date/currency helpers, hoursBetween (overnight), calendar matrix
-│  ├─ export.ts          CSV + JSON export with validated import
-│  ├─ pdfReport.ts       Monthly PDF report
-│  ├─ hebrewFont.ts      Embedded Hebrew font for the PDF
-│  └─ theme.ts           Light/dark/system preference (persist + apply)
-├─ hooks/
-│  ├─ useShifts.ts       Reactive shift queries (realtime)
-│  ├─ useSettings.ts     Reactive settings (realtime)
-│  ├─ useCountUp.ts      Animated number count-up (reduced-motion aware)
-│  └─ useTheme.ts        Reactive theme preference
-├─ components/
-│  ├─ AuthScreen.tsx     Sign in / sign up
-│  ├─ Dashboard.tsx      Bento grid
-│  ├─ NewShift.tsx       Dual-mode form with live pay breakdown
-│  ├─ History.tsx        Month picker + calendar heatmap + filterable list
-│  ├─ MonthCalendar.tsx  Per-day earnings heatmap
-│  ├─ Report.tsx         Monthly PDF report builder
-│  ├─ Settings.tsx       Rates / payroll params / data actions / account
-│  └─ tiles/             Today, Week/Month, Split, HoursByJob, EffectiveRate, GrossNet, Trend, Recent
-└─ App.tsx               Auth gate + tab shell
+├─ lib/                    # all the logic; no React in here
+│  ├─ payroll.ts           # ★ Israeli labour-law engine (OT tiers, rest-day window, deductions, hour-tier report)
+│  ├─ calc.ts              # aggregations: today/week/month, job split, trends, per-day totals
+│  ├─ utils.ts             # date/currency helpers, hoursBetween (overnight), calendar matrix
+│  ├─ supabase.ts          # client + row types      api.ts        # shift CRUD (+ demo branch)
+│  ├─ auth.tsx             # Supabase auth provider   settings.ts   # cloud-backed rates + payroll params
+│  ├─ demo.ts              # ★ client-side seeded in-memory instance (no backend)
+│  ├─ export.ts            # CSV/JSON export + import  theme.ts     # light/dark/system
+│  ├─ pdfReport.ts         # per-job monthly PDF report (RTL, hour tiers, deductions)
+│  └─ hebrewFont.ts        # embedded font for the PDF
+├─ hooks/                  # useShifts, useSettings, useCountUp, useTheme (all demo-aware)
+├─ components/             # AuthScreen, Dashboard, NewShift, History, MonthCalendar, Report, Settings, Logo
+│  └─ tiles/               # Today, Week/Month, Split, HoursByJob, EffectiveRate, GrossNet, Trend, Recent
+└─ App.tsx                 # auth/demo gate + tab shell
 
-supabase/
-├─ schema.sql            One-time setup (tables, RLS, signup trigger)
-└─ migration_v2.*.sql    Incremental column migrations
+supabase/schema.sql + migration_v2.*.sql   # tables, RLS, incremental columns
+src/lib/*.test.ts                          # payroll / calc / utils suites
 ```
 
-### Design decisions worth calling out
+Data flows one way: `payroll.ts`/`calc.ts` are pure and know nothing about React or Supabase; hooks wrap
+the Supabase (or demo) data source and feed components. Pay is computed once, at write time, and stored.
 
-- **Base pay is frozen at shift-creation time** — changing your rate in settings doesn't retroactively rewrite history. The correct behavior for a financial log.
-- **Overnight shifts** are detected with a simple invariant: if `endTime ≤ startTime`, a day is added. Covers the vast majority of hospitality shifts without an explicit checkbox.
-- **Unpaid break** is deducted from the start→end span to get paid hours; the rest-day overlap is clamped to paid hours so a break can never produce negative regular hours.
-- **Effective ₪/hr** is computed on the entire shift total (pay + tips) divided by hours — making flat-rate and hourly shifts directly comparable.
-- **CSV uses UTF-8 BOM** — a small detail, but without it Excel mangles Hebrew.
+## Decisions worth explaining
 
-## Development
+### The payroll engine is a per-hour walk, not a formula
+Israeli hourly pay isn't a single multiplier. Within one shift the rate can change **mid-shift**: the first
+8 hours are ×1.0, the next two ×1.25, anything beyond ×1.5 — and *independently*, any hour that falls inside
+the weekly rest-day window (modelled as **Saturday 19:00 → Sunday 19:00**) gets an extra **+0.5**, so a rest-day
+hour can be ×1.5, ×1.75 or ×2.0 depending on how deep into the shift it is.
+
+A closed-form formula can't express "the 9th hour, which also happens to be after Saturday 19:00." So
+`calcShiftPay` (`src/lib/payroll.ts`) does two things:
+
+1. **`buildSegments`** splits the shift into ordered segments — the part outside the rest-day window and the
+   part inside it — using clock-time overlap (`calcRestDayOverlap`), and crucially keeps their **order**
+   (did the shift enter the rest day, or start in it and leave?).
+2. It then **walks the segments hour by hour**, tracking cumulative position into the shift. At each hour it
+   picks the OT tier from the position (1.0 / 1.25 / 1.5), adds +0.5 if the current segment is inside the
+   rest-day window, and accrues `hours × rate × multiplier`. That's how a bracket change *mid-shift* — either
+   crossing an OT threshold or crossing into Saturday night — is handled exactly.
+
+The same walk, reused in `monthlyRestaurantTiers`, is what powers the report's "X hours at 150%, Y at 200%"
+breakdown. **Tip law** is applied last: a shift pays `max(computed wage, tips)` (Israeli service-tips rule).
+
+### Pay is frozen at write time
+`shifts.total` (and `base`) are computed once when a shift is saved and stored denormalised. Changing your
+rate in settings **does not** retroactively rewrite history — which is the correct behaviour for a financial
+log, and also means the dashboard never has to re-run payroll for a whole month on every render. The trade-off:
+no audit trail of *which* rate produced an old total. I accepted that for a personal log.
+
+### Shifts cross midnight, so "hours" is derived, not typed
+`hoursBetween("20:00", "02:30")` returns 6.5 by adding a day when `end ≤ start`. A single invariant covers the
+overwhelming majority of hospitality shifts without an explicit "crossed midnight" checkbox.
+
+### Light/dark without `dark:` everywhere
+Neutral colours are CSS variables (RGB triplets) that flip under a `.dark` class, so `text-ink` / `bg-surface`
+retheme automatically and I don't sprinkle `dark:` variants across 24 components. A no-flash inline script sets
+the class before first paint.
+
+### The PDF reverses Hebrew by hand
+jsPDF has no BiDi. Rather than pull in a heavyweight PDF stack, `pdfReport.ts` reverses Hebrew runs itself and
+keeps LTR values (currency, percentages) un-reversed — deliberately keeping numbers like `(125%)` out of the
+reversed text so they don't scramble.
+
+### Demo mode is a real second data source, not a fake screen
+`demo.ts` is an in-memory reactive store seeded with a full month (weekday, evening, Friday and **Shabbat**
+shifts across both jobs). The hooks and `api.ts` branch on `isDemo()`, so every screen — dashboard, calendar,
+reports, even editing — works with no account and no network, and the seed pay is computed through the *real*
+`calcShiftPay`, so the numbers on screen genuinely add up.
+
+## Running locally
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in your Supabase values
-npm run dev
+cp .env.example .env.local     # add your Supabase URL + anon key
+npm run dev                    # http://localhost:5173/mshmaroti/
 ```
 
-Opens at `http://localhost:5173`. Hebrew-only interface; `lang="he"` and `dir="rtl"` set on `<html>`.
+You don't need Supabase to look around — open the app and tap **"כניסה למצב הדגמה"** for the seeded demo.
 
-### Environment
-
-Create `.env.local` (see `.env.example`):
-
-```
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-public-key-here
+```bash
+npm run typecheck              # tsc -b
+npm test                       # vitest run (the payroll suite)
+npm run build                  # tsc + vite build (PWA)
 ```
 
-Find both in your Supabase dashboard → **Project Settings → API**.
+The marketing carousel + OG image are generated by `node scripts/carousel/build.mjs` against a running
+`npm run preview`, using Playwright (`npx playwright install chromium` once).
 
-## Supabase setup
+### Supabase / deploy
+Run `supabase/schema.sql` once, then the `migration_v2.*.sql` files in order. Deployment is automated:
+pushing to `main` runs CI (typecheck + tests) and a separate Actions workflow builds with the
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` repo secrets and publishes to Pages.
 
-1. Create a Supabase project.
-2. In the SQL editor, run `supabase/schema.sql` once (creates the `shifts` and `user_settings` tables, row-level-security policies, and a trigger that seeds default settings on signup).
-3. Apply any newer migrations in order — currently up to `supabase/migration_v2.3.sql` (adds the `break_minutes` column).
-4. (Optional) Enable the Google provider under **Authentication → Providers** to allow Google sign-in.
+## Status — what's solid and what isn't
 
-## Deploy to GitHub Pages
+**Solid:** the payroll engine is tested (OT boundary, Shabbat 150/175/200%, midnight crossing, tip law,
+multiplier override, monthly deductions, tier bucketing); light/dark + true RTL; cloud sync with RLS; demo
+mode; per-job PDF reports.
 
-Deployment is automated by GitHub Actions (`.github/workflows/deploy.yml`): every push to
-`main` builds the app and publishes it to GitHub Pages.
-
-1. **Settings → Pages → Source: GitHub Actions**.
-2. **Settings → Secrets and variables → Actions** — add the build-time secrets:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-3. Push to `main`. The workflow builds with `base = /mshmaroti/` and deploys to
-   `https://<user>.github.io/mshmaroti/`.
-
-If your repo name differs from `mshmaroti`, set `VITE_BASE=/your-repo/` (or `/` for a custom
-domain) in the build step. A manual `npm run deploy` (pushes `dist` to a `gh-pages` branch)
-remains available as a fallback.
-
-## Screenshots
-
-<table>
-<tr>
-<td width="50%">
-<strong>Dashboard</strong><br/>
-<img src="screenshots/dashboard.png" alt="Dashboard" />
-</td>
-<td width="50%">
-<strong>New shift — time mode with overnight detection</strong><br/>
-<img src="screenshots/new-shift.png" alt="New shift form" />
-</td>
-</tr>
-<tr>
-<td width="50%">
-<strong>History — calendar heatmap & filters</strong><br/>
-<img src="screenshots/history.png" alt="History" />
-</td>
-<td width="50%">
-<strong>Settings — rates & payroll parameters</strong><br/>
-<img src="screenshots/settings.png" alt="Settings" />
-</td>
-</tr>
-<tr>
-<td width="50%">
-<strong>Monthly report</strong><br/>
-<img src="screenshots/report.png" alt="Report" />
-</td>
-<td width="50%">
-<strong>PDF sample</strong><br/>
-<img src="screenshots/pdf-sample.png" alt="PDF sample" />
-</td>
-</tr>
-</table>
-
-> Screenshots predate the latest visual pass (Rubik font, motion, calendar heatmap, dark mode) and will be refreshed.
-
-## Roadmap
-
-- [x] Dark mode (light / dark / system)
-- [ ] Goal-tracking tile (monthly income target with progress ring)
-- [ ] Bilingual EN/HE toggle (strings are already centralized)
-- [ ] Deeper insights (best weekday, tip-% trends, cumulative earnings)
+**Known gaps (honest list):**
+- **`rest_day_of_week` in Settings is not wired to the engine.** The per-shift calc hardcodes the Saturday
+  19:00 window; changing that setting currently has no effect. Either wire it or remove it.
+- **Weekly overtime isn't implemented.** Only *daily* OT (8h) is modelled; `weekly_hours_max` (42h) exists as a
+  setting with no code behind it.
+- **A manual per-shift `rateMultiplier` bypasses OT and rest-day entirely** — convenient, but it can under/over-pay
+  if used carelessly.
+- **Income tax and Bituach Leumi are flat percentages.** Both are bracketed/marginal in reality; the report
+  presents an estimate, not a payslip.
+- **Migrations are manual and have drifted** — the app carries a graceful fallback for a column (`break_minutes`)
+  that isn't applied on every database. Needs real migration tooling.
+- **No error boundary, no code-splitting** (jsPDF + Recharts ship in one bundle), and `useShifts` refetches the
+  full list on any realtime change. All fine at personal scale; none of it would survive real growth.
 
 ## תקציר בעברית
 
-**משמרותי** — אפליקציית PWA בעברית למעקב אחר משמרות מלצרות בשתי עבודות, עם סנכרון לענן.
-
-- עבודה 1 (אולם אירועים): שכר יומי קבוע + תשר
-- עבודה 2 (שעתי): שכר שעתי + תשר, כולל חישוב שעות נוספות, יום מנוחה וניכויים לפי חוק
-
-לוח בקרה בסגנון bento, לוח חודשי עם מפת חום, ניכוי הפסקה לא בתשלום, מצב בהיר/כהה, דוח PDF חודשי, ייצוא ל-CSV ו-JSON, תמיכה במשמרות לילה שחוצות חצות, ומדד "שכר שעתי אפקטיבי" להשוואה אמיתית בין שתי העבודות. הנתונים נשמרים בענן (Supabase) עם הזדהות והרשאות לכל משתמש.
+**משמרותי** — אפליקציית PWA בעברית למעקב שכר מלצרות בשתי עבודות. מנוע שכר לפי חוק העבודה הישראלי (שעות נוספות
+125%/150%, תוספת יום מנוחה בשבת, ניכויי חובה), מחושב לכל משמרת בנפרד; לוח בקרה שמשווה שכר שעתי אפקטיבי בין
+העבודות; לוח חודשי עם מפת חום; דוחות PDF נפרדים לכל עבודה; מצב בהיר/כהה; ומצב הדגמה עם נתונים לדוגמה — בלי חשבון.
 
 ---
 

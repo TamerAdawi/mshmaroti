@@ -1,5 +1,13 @@
 import { supabase, type ShiftRow } from './supabase'
 import type { Shift } from '../types'
+import {
+  isDemo,
+  getDemoShifts,
+  addDemoShift,
+  updateDemoShift,
+  deleteDemoShift,
+  clearDemoShifts,
+} from './demo'
 
 // ====================================================================
 // Mapping between snake_case DB rows and camelCase app types.
@@ -58,6 +66,7 @@ function isMissingBreakColumn(error: { code?: string; message?: string } | null)
 // ====================================================================
 
 export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>): Promise<number> {
+  if (isDemo()) return addDemoShift(input)
   const user_id = await requireUserId()
   // Total logic differs by job type:
   //   wedding: base + tips (both kept, paid same-day cash)
@@ -97,6 +106,10 @@ export async function updateShift(
   id: number,
   patch: Partial<Omit<Shift, 'id' | 'createdAt'>>,
 ): Promise<void> {
+  if (isDemo()) {
+    updateDemoShift(id, patch)
+    return
+  }
   // Need to recompute total if base or tips changed
   const updates: Record<string, unknown> = {}
   if (patch.date !== undefined) updates.date = patch.date
@@ -138,17 +151,26 @@ export async function updateShift(
 }
 
 export async function deleteShift(id: number): Promise<void> {
+  if (isDemo()) {
+    deleteDemoShift(id)
+    return
+  }
   const { error } = await supabase.from('shifts').delete().eq('id', id)
   if (error) throw error
 }
 
 export async function clearAll(): Promise<void> {
+  if (isDemo()) {
+    clearDemoShifts()
+    return
+  }
   const user_id = await requireUserId()
   const { error } = await supabase.from('shifts').delete().eq('user_id', user_id)
   if (error) throw error
 }
 
 export async function fetchAllShifts(): Promise<Shift[]> {
+  if (isDemo()) return [...getDemoShifts()]
   const { data, error } = await supabase
     .from('shifts')
     .select('*')
@@ -159,6 +181,11 @@ export async function fetchAllShifts(): Promise<Shift[]> {
 }
 
 export async function bulkImport(shifts: Shift[]): Promise<void> {
+  if (isDemo()) {
+    clearDemoShifts()
+    for (const s of shifts) addDemoShift(s)
+    return
+  }
   const user_id = await requireUserId()
   // Clear existing first to match v1.x bulkImport semantics
   await clearAll()

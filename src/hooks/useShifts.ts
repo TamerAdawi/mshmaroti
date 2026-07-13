@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllShifts } from '../lib/api'
+import { isDemo, getDemoShifts, subscribeDemo } from '../lib/demo'
 import type { JobType, Shift } from '../types'
 
 /**
@@ -12,6 +13,12 @@ export function useAllShifts(): Shift[] | undefined {
   const [shifts, setShifts] = useState<Shift[] | undefined>(undefined)
 
   useEffect(() => {
+    // Demo mode: read from the in-memory seeded store, no Supabase.
+    if (isDemo()) {
+      setShifts([...getDemoShifts()])
+      return subscribeDemo(() => setShifts([...getDemoShifts()]))
+    }
+
     let mounted = true
     let timeoutId: ReturnType<typeof setTimeout> | null = null
 

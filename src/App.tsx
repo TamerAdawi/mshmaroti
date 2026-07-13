@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { t } from './strings'
 import { cn } from './lib/utils'
 import { useTheme } from './hooks/useTheme'
 import { resolveDark } from './lib/theme'
+import { subscribeDemo, demoSnapshot, exitDemo } from './lib/demo'
 import { AuthProvider, useAuth } from './lib/auth'
 import Logo from './components/Logo'
 import AuthScreen from './components/AuthScreen'
@@ -23,8 +24,16 @@ export default function App() {
   )
 }
 
+/** Reactive demo-mode flag. */
+function useDemoActive(): boolean {
+  return useSyncExternalStore(subscribeDemo, demoSnapshot, demoSnapshot)
+}
+
 function AuthGate() {
+  const demo = useDemoActive()
   const { session, loading } = useAuth()
+
+  if (demo) return <AppShell demo />
 
   if (loading) {
     return (
@@ -39,7 +48,7 @@ function AuthGate() {
   return <AppShell />
 }
 
-function AppShell() {
+function AppShell({ demo = false }: { demo?: boolean }) {
   const [tab, setTab] = useState<Tab>('dashboard')
   const [editing, setEditing] = useState<Shift | null>(null)
 
@@ -55,6 +64,14 @@ function AppShell() {
 
   return (
     <div className="min-h-dvh flex flex-col safe-top">
+      {demo && (
+        <div data-demo-banner className="bg-hero-gradient text-white text-[12px] font-semibold px-4 py-1.5 flex items-center justify-center gap-3">
+          <span>{t.demo.banner}</span>
+          <button onClick={() => exitDemo()} className="underline underline-offset-2 active:scale-95 transition">
+            {t.demo.exit}
+          </button>
+        </div>
+      )}
       <header className="px-5 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <Logo className="h-12 w-12" />

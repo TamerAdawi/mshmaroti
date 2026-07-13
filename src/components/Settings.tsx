@@ -5,6 +5,7 @@ import { clearAll } from '../lib/api'
 import { exportCsv, exportJson, downloadBlob, importJsonFile, makeFilename } from '../lib/export'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../hooks/useTheme'
+import { isDemo, exitDemo } from '../lib/demo'
 import { t } from '../strings'
 import { cn } from '../lib/utils'
 
@@ -186,12 +187,14 @@ export default function Settings() {
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-hero-gradient flex items-center justify-center shrink-0 shadow-float">
             <span className="font-bold text-white text-sm">
-              {(user?.email?.[0] ?? '?').toUpperCase()}
+              {isDemo() ? 'ד' : (user?.email?.[0] ?? '?').toUpperCase()}
             </span>
           </div>
-          <div className="text-sm text-ink truncate flex-1 min-w-0">{user?.email ?? '—'}</div>
+          <div className="text-sm text-ink truncate flex-1 min-w-0">{isDemo() ? t.demo.user : (user?.email ?? '—')}</div>
         </div>
-        <button onClick={signOut} className="btn-secondary w-full">{t.auth.signOut}</button>
+        <button onClick={isDemo() ? () => exitDemo() : signOut} className="btn-secondary w-full">
+          {isDemo() ? t.demo.exit : t.auth.signOut}
+        </button>
       </section>
 
       <section className="tile p-5">

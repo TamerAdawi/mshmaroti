@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchSettings, saveSettings, DEFAULT_SETTINGS, type Settings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
+import { isDemo, getDemoSettings, setDemoSettings, subscribeDemo } from '../lib/demo'
 
 /**
  * Reactive settings, backed by user_settings table.
@@ -11,6 +12,12 @@ export function useSettings(): [Settings, (next: Settings) => Promise<void>] {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
 
   useEffect(() => {
+    // Demo mode: read/write the in-memory seeded settings, no Supabase.
+    if (isDemo()) {
+      setSettings({ ...getDemoSettings() })
+      return subscribeDemo(() => setSettings({ ...getDemoSettings() }))
+    }
+
     let mounted = true
 
     const load = async () => {
@@ -37,6 +44,10 @@ export function useSettings(): [Settings, (next: Settings) => Promise<void>] {
 
   const update = async (next: Settings) => {
     setSettings(next) // optimistic
+    if (isDemo()) {
+      setDemoSettings(next)
+      return
+    }
     await saveSettings(next)
   }
 

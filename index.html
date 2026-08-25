@@ -31,6 +31,39 @@
         } catch (e) {}
       })()
     </script>
+    <script>
+      // Self-heal: if a stale/broken service-worker cache serves an index.html
+      // whose JS chunks are gone, React never mounts and the app "freezes" on
+      // open. If nothing has mounted a while after load AND a service worker is
+      // controlling the page, purge caches + unregister and reload — once.
+      (function () {
+        var KEY = 'mshmaroti-heal'
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root')
+            if (root && root.children.length > 0) {
+              try { sessionStorage.removeItem(KEY) } catch (e) {}
+              return
+            }
+            if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return
+            try { if (sessionStorage.getItem(KEY) === '1') return } catch (e) { return }
+            try { sessionStorage.setItem(KEY, '1') } catch (e) {}
+            var jobs = [
+              navigator.serviceWorker.getRegistrations().then(function (rs) {
+                return Promise.all(rs.map(function (r) { return r.unregister() }))
+              }).catch(function () {}),
+            ]
+            if (window.caches && caches.keys) {
+              jobs.push(caches.keys().then(function (ks) {
+                return Promise.all(ks.map(function (k) { return caches.delete(k) }))
+              }).catch(function () {}))
+            }
+            var reload = function () { location.reload() }
+            Promise.all(jobs).then(reload, reload)
+          }, 10000)
+        })
+      })()
+    </script>
     <title>משמרותי</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

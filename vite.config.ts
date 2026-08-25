@@ -33,6 +33,12 @@ export default defineConfig({
         // Online-first: shell cache only, data lives in IndexedDB
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         navigateFallback: `${base}index.html`,
+        // Purge precaches from previous deploys so a new SW never serves an
+        // index.html that points at hashed chunks it no longer has cached
+        // (that mismatch is what froze the app on open).
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ],

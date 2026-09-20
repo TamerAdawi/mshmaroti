@@ -9,9 +9,11 @@ Supabase project **cleanly, read-only, and without coupling to Mshmaroti's inter
 > - Mshmaroti stays untouched: additive + read-only only.
 
 Supabase project: `https://rqozlxefqyhwxxgfhviq.supabase.co`
-Live migration state (as audited): **v2.0 + v2.1 + v2.2 applied; v2.3, v2.4 and v2.5 NOT applied** — `shifts.break_minutes`, `shifts.travel` and `user_settings.rest_day_multiplier` do not exist in the live DB, so do not reference them. Re-check before relying on this: v2.4 and v2.5 are new and may have been applied since.
+Live migration state (verified against the live DB on 2026-09-20): **v2.0 → v2.5 all applied.** `shifts.break_minutes`, `shifts.travel` and `user_settings.rest_day_multiplier` all exist and are safe to reference. `user_settings.hourly_monthly_travel` still exists but is **deprecated and unread** — travel now lives on `shifts.travel`.
 
-> **⚠️ v2.4 changed what `total` means for restaurant shifts.** It used to be `max(base, tips)`; it is now `base + tips` — tips are added on top of the wage instead of competing with it. Shifts written before v2.4 still hold the old frozen value unless the optional backfill in `supabase/migration_v2.4.sql` has been run. See §2.
+> **⚠️ v2.4 changed what `total` means for restaurant shifts.** It used to be `max(base, tips)`; it is now `base + tips` — tips are added on top of the wage instead of competing with it.
+>
+> **The optional backfill has NOT been run.** Shifts written before v2.4 still hold the old frozen value, so a month can mix both conventions. As of 2026-09-20 that is 3 `hourly` rows (2026-09-14, -16, -20) understating a combined ₪100. Identify them with `total <> base + tips` on `job_type = 'hourly'`. See §2.
 
 ---
 

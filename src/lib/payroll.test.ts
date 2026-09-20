@@ -19,6 +19,7 @@ const S: Settings = {
   restDayOfWeek: 6,
   dailyHoursThreshold: 8,
   restDayMultiplier: 1.5,
+  travelPerShift: 12,
   bituachRate: 0.0427,
   pensionRate: 0.06,
   pensionActive: true,

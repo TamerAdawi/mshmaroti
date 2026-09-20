@@ -145,6 +145,25 @@ export default function Settings() {
             </div>
           </Field>
 
+          <Field label="נסיעות למשמרת (₪)">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="1"
+              value={draft.travelPerShift}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                setDraft({ ...draft, travelPerShift: Number.isFinite(n) && n >= 0 ? n : 0 })
+              }}
+              className="input-field tabular-nums"
+            />
+            <div className="text-[11px] text-muted mt-1 px-1">
+              הסכום שנרשם כשמסמנים "נסיעות" במשמרת חדשה. נשמר על המשמרת עצמה — שינוי כאן לא
+              משנה משמרות קיימות.
+            </div>
+          </Field>
+
           <Field label="שעות יומיות עד שעות נוספות">
             <input type="number" inputMode="decimal" min="0" step="0.1" value={draft.dailyHoursThreshold} onChange={(e) => setDraft({ ...draft, dailyHoursThreshold: Number(e.target.value) || 8 })} className="input-field tabular-nums" />
             <div className="text-[11px] text-muted mt-1 px-1">לפי החוק: 8 שעות, מעבר לכך 125% ואז 150%</div>

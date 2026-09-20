@@ -27,7 +27,9 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
   const [endTime, setEndTime] = useState(editing?.endTime ?? '00:00')
   const [hoursInput, setHoursInput] = useState(editing ? String(editing.hours) : '')
   const [tipsInput, setTipsInput] = useState(editing ? String(editing.tips) : '')
-  const [travelInput, setTravelInput] = useState(editing && (editing.travel ?? 0) > 0 ? String(editing.travel) : '')
+  // Travel is a yes/no per shift; the amount lives in Settings. New shifts default
+  // to travelled, since you normally do.
+  const [travelled, setTravelled] = useState(editing ? (editing.travel ?? 0) > 0 : true)
   const [expensesInput, setExpensesInput] = useState(editing && (editing.expenses ?? 0) > 0 ? String(editing.expenses) : '')
   const [breakInput, setBreakInput] = useState(editing && (editing.breakMinutes ?? 0) > 0 ? String(editing.breakMinutes) : '')
   const [multiplierInput, setMultiplierInput] = useState(
@@ -84,12 +86,13 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
   // disagree with the number that actually gets saved.
   const restDayMultiplier = useMemo(() => round2(1 + restDayBonusOf(settings)), [settings])
 
-  // Travel reimbursement — logged per shift, hourly job only.
-  const travel = useMemo(() => {
-    if (jobType !== 'hourly') return 0
-    const n = Number(travelInput)
-    return Number.isFinite(n) && n >= 0 ? n : 0
-  }, [jobType, travelInput])
+  // Travel reimbursement — hourly job only. The amount comes from Settings and is
+  // stored on the shift, so a later change to the setting leaves this shift alone.
+  const travelRate = useMemo(() => {
+    const n = settings.travelPerShift
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }, [settings])
+  const travel = jobType === 'hourly' && travelled ? travelRate : 0
 
   /** Payroll breakdown for restaurant shifts (null for wedding). */
   const breakdown = useMemo(() => {
@@ -124,7 +127,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
     return breakdown?.gross ?? base + tips
   }, [jobType, base, tips, breakdown])
 
-  useEffect(() => setError(null), [date, jobType, mode, startTime, endTime, hoursInput, tipsInput, travelInput, expensesInput, multiplierInput, breakInput])
+  useEffect(() => setError(null), [date, jobType, mode, startTime, endTime, hoursInput, tipsInput, travelled, expensesInput, multiplierInput, breakInput])
 
   const canSubmit = computedHours !== null && computedHours > 0 && !submitting
 
@@ -260,19 +263,22 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
           </Field>
 
           {jobType === 'hourly' && (
-            <Field label={t.form.travel}>
+            <label className="flex items-center justify-between gap-3 cursor-pointer rounded-xl bg-elevate border border-line px-4 py-3">
+              <div className="flex flex-col">
+                <span className="text-ink font-medium text-sm">{t.form.travel}</span>
+                <span className="text-[11px] text-muted">
+                  {travelRate > 0
+                    ? t.form.travelHint.replace('{amount}', fmtIls(travelRate))
+                    : t.form.travelUnset}
+                </span>
+              </div>
               <input
-                type="number"
-                inputMode="decimal"
-                step="1"
-                min="0"
-                placeholder={t.form.travelPlaceholder}
-                value={travelInput}
-                onChange={(e) => setTravelInput(e.target.value)}
-                className="input-field tabular-nums"
+                type="checkbox"
+                checked={travelled}
+                onChange={(e) => setTravelled(e.target.checked)}
+                className="w-5 h-5 shrink-0 cursor-pointer accent-indigo-deep"
               />
-              <div className="text-[11px] text-muted mt-1 px-1">{t.form.travelHint}</div>
-            </Field>
+            </label>
           )}
 
           <Field label={t.form.expenses}>

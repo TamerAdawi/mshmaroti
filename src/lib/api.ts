@@ -26,6 +26,7 @@ export function rowToShift(row: ShiftRow): Shift {
     endTime: row.end_time ?? undefined,
     base: Number(row.base),
     tips: Number(row.tips),
+    travel: row.travel != null ? Number(row.travel) : 0,
     expenses: Number(row.expenses),
     total: Number(row.total),
     rateMultiplier: row.rate_multiplier != null ? Number(row.rate_multiplier) : 1.0,
@@ -51,13 +52,41 @@ async function requireUserId(): Promise<string> {
 }
 
 /**
- * True when a write failed only because the `break_minutes` column hasn't been
- * added yet (migration_v2.3.sql not run). Lets us degrade gracefully on older DBs.
- * 42703 = undefined_column (Postgres); PGRST204 = column missing from schema cache.
+ * Columns added by later migrations that a database may not have yet.
+ * Writes degrade gracefully rather than failing outright when one is absent.
  */
-function isMissingBreakColumn(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false
-  return error.code === '42703' || /break_minutes/i.test(error.message ?? '')
+const OPTIONAL_COLUMNS = ['break_minutes', 'travel'] as const
+
+type WriteError = { code?: string; message?: string } | null
+
+/**
+ * If a write failed only because an optional column doesn't exist yet, drop that
+ * column from the pending rows and return its name so the caller can retry.
+ * 42703 = undefined_column (Postgres); PGRST204 = column missing from schema cache.
+ * When the error names no column in particular, strip every optional one we sent —
+ * losing an optional field beats losing the shift.
+ */
+function stripMissingColumn(error: WriteError, rows: Record<string, unknown>[]): string | null {
+  if (!error) return null
+  const sent = OPTIONAL_COLUMNS.filter((c) => rows.some((r) => c in r))
+  if (sent.length === 0) return null
+
+  const message = (error.message ?? '').toLowerCase()
+  const named = sent.filter((c) => message.includes(c))
+  const byCode = error.code === '42703' || error.code === 'PGRST204'
+  if (!byCode && named.length === 0) return null
+
+  // Prefer the column the error actually names; otherwise drop every optional
+  // column we sent, since we can't tell which one the database is missing.
+  const drop = named.length > 0 ? named : sent
+  for (const r of rows) for (const c of drop) delete r[c]
+  return drop.join(', ')
+}
+
+function warnDropped(columns: string): void {
+  console.warn(
+    `Column(s) ${columns} missing — saving without them. Run the supabase/migration_v2.*.sql files to enable these fields.`,
+  )
 }
 
 // ====================================================================
@@ -68,12 +97,9 @@ function isMissingBreakColumn(error: { code?: string; message?: string } | null)
 export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>): Promise<number> {
   if (isDemo()) return addDemoShift(input)
   const user_id = await requireUserId()
-  // Total logic differs by job type:
-  //   wedding: base + tips (both kept, paid same-day cash)
-  //   hourly:  max(base, tips) per Israeli tip law — whichever is higher is what you receive
-  const total = input.jobType === 'wedding'
-    ? input.base + input.tips
-    : Math.max(input.base, input.tips)
+  // Tips are additive for both jobs: you keep the wage AND the tips.
+  // Travel stays out of `total` — it is a reimbursement, not pay for hours worked.
+  const total = input.base + input.tips
   const row: Record<string, unknown> = {
     user_id,
     date: input.date,
@@ -88,14 +114,16 @@ export async function addShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>)
     rate_multiplier: input.rateMultiplier ?? 1.0,
     notes: input.notes ?? null,
   }
-  // Only write break_minutes when there's an actual break, so saves still work
-  // on databases that haven't run migration_v2.3.sql yet.
+  // Send the optional columns only when they carry a value — both default to 0 in
+  // the schema, so omitting them costs nothing and saves a round trip on older DBs.
   if ((input.breakMinutes ?? 0) > 0) row.break_minutes = input.breakMinutes
+  if ((input.travel ?? 0) > 0) row.travel = input.travel
 
   let res = await supabase.from('shifts').insert(row).select('id').single()
-  if (res.error && 'break_minutes' in row && isMissingBreakColumn(res.error)) {
-    console.warn('break_minutes column missing — saving without it. Run supabase/migration_v2.3.sql to enable break tracking.')
-    delete row.break_minutes
+  for (let i = 0; i < OPTIONAL_COLUMNS.length; i++) {
+    const dropped = stripMissingColumn(res.error, [row])
+    if (!dropped) break
+    warnDropped(dropped)
     res = await supabase.from('shifts').insert(row).select('id').single()
   }
   if (res.error) throw res.error
@@ -115,8 +143,10 @@ export async function updateShift(
   if (patch.date !== undefined) updates.date = patch.date
   if (patch.jobType !== undefined) updates.job_type = patch.jobType
   if (patch.hours !== undefined) updates.hours = patch.hours
-  // Only write break_minutes when > 0 (keeps saves working pre-migration_v2.3).
-  if (patch.breakMinutes !== undefined && patch.breakMinutes > 0) updates.break_minutes = patch.breakMinutes
+  // Written even when 0 — an edit has to be able to clear a break or a travel
+  // allowance. The retry below drops them if the DB lacks the columns.
+  if (patch.breakMinutes !== undefined) updates.break_minutes = patch.breakMinutes
+  if (patch.travel !== undefined) updates.travel = patch.travel
   if (patch.startTime !== undefined) updates.start_time = patch.startTime ?? null
   if (patch.endTime !== undefined) updates.end_time = patch.endTime ?? null
   if (patch.base !== undefined) updates.base = patch.base
@@ -125,26 +155,24 @@ export async function updateShift(
   if (patch.rateMultiplier !== undefined) updates.rate_multiplier = patch.rateMultiplier
   if (patch.notes !== undefined) updates.notes = patch.notes ?? null
 
-  // Recompute total when base, tips, or jobType changes
-  if (patch.base !== undefined || patch.tips !== undefined || patch.jobType !== undefined) {
+  // Recompute total when base or tips changes — total is base + tips for both jobs.
+  if (patch.base !== undefined || patch.tips !== undefined) {
     const { data: existing, error: fetchErr } = await supabase
       .from('shifts')
-      .select('base, tips, job_type')
+      .select('base, tips')
       .eq('id', id)
       .single()
     if (fetchErr) throw fetchErr
     const newBase = patch.base ?? Number(existing.base)
     const newTips = patch.tips ?? Number(existing.tips)
-    const newJobType = patch.jobType ?? existing.job_type
-    updates.total = newJobType === 'wedding'
-      ? newBase + newTips
-      : Math.max(newBase, newTips)
+    updates.total = newBase + newTips
   }
 
   let res = await supabase.from('shifts').update(updates).eq('id', id)
-  if (res.error && 'break_minutes' in updates && isMissingBreakColumn(res.error)) {
-    console.warn('break_minutes column missing — saving without it. Run supabase/migration_v2.3.sql to enable break tracking.')
-    delete updates.break_minutes
+  for (let i = 0; i < OPTIONAL_COLUMNS.length; i++) {
+    const dropped = stripMissingColumn(res.error, [updates])
+    if (!dropped) break
+    warnDropped(dropped)
     res = await supabase.from('shifts').update(updates).eq('id', id)
   }
   if (res.error) throw res.error
@@ -206,19 +234,21 @@ export async function bulkImport(shifts: Shift[]): Promise<void> {
       notes: s.notes ?? null,
     }
     if ((s.breakMinutes ?? 0) > 0) row.break_minutes = s.breakMinutes
+    if ((s.travel ?? 0) > 0) row.travel = s.travel
     return row
   })
   // Chunk to stay under any payload limits (Supabase handles up to ~1MB easily)
   const CHUNK = 500
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK)
-    let { error } = await supabase.from('shifts').insert(chunk)
-    if (error && chunk.some((r) => 'break_minutes' in r) && isMissingBreakColumn(error)) {
-      console.warn('break_minutes column missing — importing without it. Run supabase/migration_v2.3.sql to enable break tracking.')
-      for (const r of chunk) delete r.break_minutes
-      ;({ error } = await supabase.from('shifts').insert(chunk))
+    let res = await supabase.from('shifts').insert(chunk)
+    for (let attempt = 0; attempt < OPTIONAL_COLUMNS.length; attempt++) {
+      const dropped = stripMissingColumn(res.error, chunk)
+      if (!dropped) break
+      warnDropped(dropped)
+      res = await supabase.from('shifts').insert(chunk)
     }
-    if (error) throw error
+    if (res.error) throw res.error
   }
 }
 

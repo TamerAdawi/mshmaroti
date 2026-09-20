@@ -28,7 +28,7 @@ and a dashboard built around a single comparison: **effective ₪/hour across bo
 | Charts | Recharts 2.15 |
 | PDF | jsPDF + jspdf-autotable (hand-rolled RTL) |
 | PWA | vite-plugin-pwa (Workbox) |
-| Tests | Vitest 4 (33 tests over the pure payroll/calc/date logic) |
+| Tests | Vitest 4 (43 tests over the pure payroll/calc/date logic) |
 | CI / deploy | GitHub Actions → typecheck + tests, and build → GitHub Pages |
 | Tooling | Playwright (headless, generates the marketing carousel + OG image) |
 
@@ -37,7 +37,7 @@ and a dashboard built around a single comparison: **effective ₪/hour across bo
 - **~4,760 LOC** of app TypeScript/TSX, **~325 LOC** of tests
 - **16 components** (8 screens/shared + 8 dashboard tiles), **11 lib modules**, **4 hooks**
 - **2 Postgres tables** (`shifts`, `user_settings`), RLS on both
-- **33 unit tests** on the money math, running in CI on every push
+- **43 unit tests** on the money math, running in CI on every push
 
 ## Architecture
 
@@ -70,8 +70,9 @@ the Supabase (or demo) data source and feed components. Pay is computed once, at
 ### The payroll engine is a per-hour walk, not a formula
 Israeli hourly pay isn't a single multiplier. Within one shift the rate can change **mid-shift**: the first
 8 hours are ×1.0, the next two ×1.25, anything beyond ×1.5 — and *independently*, any hour that falls inside
-the weekly rest-day window (modelled as **Saturday 19:00 → Sunday 19:00**) gets an extra **+0.5**, so a rest-day
-hour can be ×1.5, ×1.75 or ×2.0 depending on how deep into the shift it is.
+the weekly rest-day window (modelled as **Saturday 19:00 → Sunday 19:00**) is paid at the configured rest-day
+rate (default **150%**, the legal minimum, editable in Settings), so at the default a rest-day hour can be
+×1.5, ×1.75 or ×2.0 depending on how deep into the shift it is.
 
 A closed-form formula can't express "the 9th hour, which also happens to be after Saturday 19:00." So
 `calcShiftPay` (`src/lib/payroll.ts`) does two things:
@@ -80,18 +81,39 @@ A closed-form formula can't express "the 9th hour, which also happens to be afte
    part inside it — using clock-time overlap (`calcRestDayOverlap`), and crucially keeps their **order**
    (did the shift enter the rest day, or start in it and leave?).
 2. It then **walks the segments hour by hour**, tracking cumulative position into the shift. At each hour it
-   picks the OT tier from the position (1.0 / 1.25 / 1.5), adds +0.5 if the current segment is inside the
-   rest-day window, and accrues `hours × rate × multiplier`. That's how a bracket change *mid-shift* — either
-   crossing an OT threshold or crossing into Saturday night — is handled exactly.
+   picks the OT tier from the position (1.0 / 1.25 / 1.5), adds the rest-day premium if the current segment is
+   inside the rest-day window, and accrues `hours × rate × multiplier`. That's how a bracket change *mid-shift*
+   — either crossing an OT threshold or crossing into Saturday night — is handled exactly.
 
 The same walk, reused in `monthlyRestaurantTiers`, is what powers the report's "X hours at 150%, Y at 200%"
-breakdown. **Tip law** is applied last: a shift pays `max(computed wage, tips)` (Israeli service-tips rule).
+breakdown. **Tips are added last, on top of the wage**: a shift pays `computed wage + tips`.
+
+### The rest-day rate is a setting, so the tier report can't be a fixed list
+`restDayMultiplier` (default 1.5) is the rate paid inside the rest-day window, and overtime stacks on top of
+it: `rate`, `rate + 0.25`, `rate + 0.5`. Because the premium is no longer a hardcoded +0.5, the set of rates a
+month can contain isn't knowable in advance — at 150% you get the familiar 100/125/150/175/200, at 175% you get
+100/125/150/175/200/225. So `monthlyRestaurantTiers` returns **computed buckets** (`{ mult, hours, restDay }[]`,
+ascending) rather than the five fixed `h100…h200` fields it used to, and the PDF renders whatever rates actually
+occurred. Buckets are keyed by rate *and* by whether the hour was a rest-day hour, so at the default 150% the
+OT-tier-2 hour and the rest-day base hours stay on separate rows despite paying the same.
+
+The engine reads the setting through `restDayBonusOf()`, which floors it at the legal 150% if it's missing or
+nonsensical — so a database that hasn't run `migration_v2.5.sql` computes exactly what it did before.
 
 ### Pay is frozen at write time
 `shifts.total` (and `base`) are computed once when a shift is saved and stored denormalised. Changing your
 rate in settings **does not** retroactively rewrite history — which is the correct behaviour for a financial
 log, and also means the dashboard never has to re-run payroll for a whole month on every render. The trade-off:
 no audit trail of *which* rate produced an old total. I accepted that for a personal log.
+
+The same freezing applies to the v2.4 switch from `max(wage, tips)` to `wage + tips`: shifts saved before it
+keep the total they were written with. `supabase/migration_v2.4.sql` carries an optional, commented-out
+backfill for restating them.
+
+### Travel is per shift, and deliberately outside `total`
+A travel allowance is logged on each restaurant shift rather than as one monthly figure. It's a reimbursement
+for a cost, not pay for hours — so it stays out of `total` (and therefore out of every ₪/hour figure the
+dashboard compares) and is added untaxed at the monthly-net step in `calcMonthlyBreakdown`.
 
 ### Shifts cross midnight, so "hours" is derived, not typed
 `hoursBetween("20:00", "02:30")` returns 6.5 by adding a day when `end ≤ start`. A single invariant covers the
@@ -139,21 +161,24 @@ pushing to `main` runs CI (typecheck + tests) and a separate Actions workflow bu
 
 ## Status — what's solid and what isn't
 
-**Solid:** the payroll engine is tested (OT boundary, Shabbat 150/175/200%, midnight crossing, tip law,
-multiplier override, monthly deductions, tier bucketing); light/dark + true RTL; cloud sync with RLS; demo
-mode; per-job PDF reports.
+**Solid:** the payroll engine is tested (OT boundary, Shabbat 150/175/200%, a configurable rest-day rate and
+how OT stacks on it, midnight crossing, additive tips, multiplier override, monthly deductions, tier
+bucketing); light/dark + true RTL; cloud sync with RLS; demo mode; per-job PDF reports.
 
 **Known gaps (honest list):**
-- **`rest_day_of_week` in Settings is not wired to the engine.** The per-shift calc hardcodes the Saturday
-  19:00 window; changing that setting currently has no effect. Either wire it or remove it.
+- **`rest_day_of_week` in Settings is not wired to the engine.** The rest-day *rate* is editable, but the
+  *window* is still hardcoded to Saturday 19:00 → Sunday 19:00; changing the day has no effect. The Settings
+  screen now says so out loud instead of implying otherwise. Either wire it or remove it.
 - **Weekly overtime isn't implemented.** Only *daily* OT (8h) is modelled; `weekly_hours_max` (42h) exists as a
   setting with no code behind it.
 - **A manual per-shift `rateMultiplier` bypasses OT and rest-day entirely** — convenient, but it can under/over-pay
   if used carelessly.
 - **Income tax and Bituach Leumi are flat percentages.** Both are bracketed/marginal in reality; the report
   presents an estimate, not a payslip.
-- **Migrations are manual and have drifted** — the app carries a graceful fallback for a column (`break_minutes`)
-  that isn't applied on every database. Needs real migration tooling.
+- **Migrations are manual and have drifted** — the app carries a graceful fallback for the columns added by
+  later migrations (`break_minutes`, `travel`), which aren't applied on every database: a write that fails
+  because a column is missing is retried without it, so you silently lose that field instead of the shift.
+  Needs real migration tooling.
 - **No error boundary, no code-splitting** (jsPDF + Recharts ship in one bundle), and `useShifts` refetches the
   full list on any realtime change. All fine at personal scale; none of it would survive real growth.
 

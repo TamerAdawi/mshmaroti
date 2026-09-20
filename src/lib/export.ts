@@ -1,7 +1,7 @@
 import type { Shift } from '../types'
 import { bulkImport, fetchAllShifts } from './api'
 
-const CSV_HEADERS = ['id', 'date', 'jobType', 'hours', 'breakMinutes', 'startTime', 'endTime', 'base', 'tips', 'expenses', 'total', 'notes', 'createdAt']
+const CSV_HEADERS = ['id', 'date', 'jobType', 'hours', 'breakMinutes', 'startTime', 'endTime', 'base', 'tips', 'travel', 'expenses', 'total', 'notes', 'createdAt']
 
 function csvEscape(v: unknown): string {
   const s = v == null ? '' : String(v)
@@ -16,7 +16,7 @@ export async function exportCsv(): Promise<Blob> {
   const rows = [CSV_HEADERS.join(',')]
   for (const s of shifts) {
     rows.push(
-      [s.id, s.date, s.jobType, s.hours, s.breakMinutes ?? 0, s.startTime ?? '', s.endTime ?? '', s.base, s.tips, s.expenses ?? 0, s.total, s.notes ?? '', s.createdAt]
+      [s.id, s.date, s.jobType, s.hours, s.breakMinutes ?? 0, s.startTime ?? '', s.endTime ?? '', s.base, s.tips, s.travel ?? 0, s.expenses ?? 0, s.total, s.notes ?? '', s.createdAt]
         .map(csvEscape)
         .join(','),
     )
@@ -73,10 +73,15 @@ export async function importJsonFile(file: File): Promise<ImportResult> {
   }
   const raw: unknown = parsed.shifts
   if (!Array.isArray(raw)) throw new Error('קובץ פגום')
-  // Backfill expenses=0 for older backups
+  // Backfill expenses/travel = 0 for older backups
   const valid: Shift[] = raw
     .filter(isShift)
-    .map((s) => ({ ...s, id: undefined, expenses: typeof s.expenses === 'number' ? s.expenses : 0 }))
+    .map((s) => ({
+      ...s,
+      id: undefined,
+      expenses: typeof s.expenses === 'number' ? s.expenses : 0,
+      travel: typeof s.travel === 'number' ? s.travel : 0,
+    }))
   if (valid.length === 0) throw new Error('אין משמרות תקינות בקובץ')
   await bulkImport(valid)
   return { imported: valid.length }

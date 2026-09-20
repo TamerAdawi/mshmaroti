@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { useTheme } from '../hooks/useTheme'
 import { isDemo, exitDemo } from '../lib/demo'
 import { t } from '../strings'
-import { cn } from '../lib/utils'
+import { cn, fmtIls } from '../lib/utils'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
@@ -111,17 +111,43 @@ export default function Settings() {
               <option value={5}>שישי</option>
               <option value={6}>שבת</option>
             </select>
-            <div className="text-[11px] text-muted mt-1 px-1">כל השעות ביום זה משולמות במכפיל ×1.5</div>
+            <div className="text-[11px] text-muted mt-1 px-1">
+              ⚠️ ההגדרה הזו עדיין לא מחוברת לחישוב — חלון יום המנוחה קבוע על שבת 19:00 עד ראשון 19:00.
+            </div>
+          </Field>
+
+          <Field label="תעריף יום מנוחה (%)">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="100"
+              step="5"
+              value={Math.round(draft.restDayMultiplier * 100)}
+              // Accept anything parseable while typing — clamping mid-keystroke would
+              // rewrite the field under the cursor ("1" of "175" snapping back to 150).
+              onChange={(e) => {
+                const pct = Number(e.target.value)
+                if (!Number.isFinite(pct)) return
+                setDraft({ ...draft, restDayMultiplier: pct / 100 })
+              }}
+              // Snap to the legal minimum once they're done with the field.
+              onBlur={() => {
+                if (!(draft.restDayMultiplier >= 1)) {
+                  setDraft({ ...draft, restDayMultiplier: DEFAULT_SETTINGS.restDayMultiplier })
+                }
+              }}
+              className="input-field tabular-nums"
+            />
+            <div className="text-[11px] text-muted mt-1 px-1">
+              לפי החוק לפחות 150%. כרגע: {fmtIls(draft.hourlyRate * draft.restDayMultiplier)} לשעה
+              {' · '}שעות נוספות ביום מנוחה: {Math.round(draft.restDayMultiplier * 100 + 25)}% ואז{' '}
+              {Math.round(draft.restDayMultiplier * 100 + 50)}%
+            </div>
           </Field>
 
           <Field label="שעות יומיות עד שעות נוספות">
             <input type="number" inputMode="decimal" min="0" step="0.1" value={draft.dailyHoursThreshold} onChange={(e) => setDraft({ ...draft, dailyHoursThreshold: Number(e.target.value) || 8 })} className="input-field tabular-nums" />
             <div className="text-[11px] text-muted mt-1 px-1">לפי החוק: 8 שעות, מעבר לכך 125% ואז 150%</div>
-          </Field>
-
-          <Field label="נסיעות חודשי (₪)">
-            <input type="number" inputMode="decimal" min="0" value={draft.hourlyMonthlyTravel} onChange={(e) => setDraft({ ...draft, hourlyMonthlyTravel: Number(e.target.value) || 0 })} className="input-field tabular-nums" />
-            <div className="text-[11px] text-muted mt-1 px-1">סכום נוסף לחודש (פטור ממס)</div>
           </Field>
 
           <Field label="ביטוח לאומי + ביטוח בריאות (%)">

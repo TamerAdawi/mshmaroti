@@ -336,20 +336,29 @@ export async function generateReport(
       { label: t.report.shifts, value: String(tiers.shifts) },
       { label: t.report.totalHours, value: fmtPdfHours(tiers.totalHours), bold: true },
     ]
+    // Buckets are computed from the OT threshold and the configured rest-day rate,
+    // so the rows here follow whatever rates were actually paid.
     // Percentage lives in the LTR value (right-side Hebrew labels get reversed).
-    const tierDefs: Array<[number, string, number, [number, number, number]]> = [
-      [tiers.h100, t.report.regularHours, 100, COLORS.body],
-      [tiers.h125, t.report.overtimeHours, 125, COLORS.violet],
-      [tiers.h150, t.report.overtimeHours, 150, COLORS.coral],
-      [tiers.h175, t.report.overtimeHours, 175, COLORS.pink],
-      [tiers.h200, t.report.overtimeHours, 200, COLORS.pink],
+    const tierPalette: Array<[number, number, number]> = [
+      COLORS.body, COLORS.violet, COLORS.coral, COLORS.pink, COLORS.pink,
     ]
     let firstTier = true
-    for (const [h, label, pct, color] of tierDefs) {
-      if (h <= 0.001) continue
-      rows.push({ label, value: `${fmtPdfHours(h)}  (${pct}%)`, color, rule: firstTier })
+    tiers.tiers.forEach((bucket, i) => {
+      if (bucket.hours <= 0.001) return
+      const label = bucket.restDay
+        ? t.report.restDayHours
+        : bucket.mult > 1.0
+          ? t.report.overtimeHours
+          : t.report.regularHours
+      const pct = Math.round(bucket.mult * 100)
+      rows.push({
+        label,
+        value: `${fmtPdfHours(bucket.hours)}  (${pct}%)`,
+        color: tierPalette[Math.min(i, tierPalette.length - 1)],
+        rule: firstTier,
+      })
       firstTier = false
-    }
+    })
     if (tiers.overrideHours > 0.001) {
       rows.push({ label: t.report.manualMultiplier, value: fmtPdfHours(tiers.overrideHours), color: COLORS.body, rule: firstTier })
     }
@@ -458,9 +467,7 @@ export async function generateReport(
       const baseCell = mult !== 1.0 && s.jobType === 'hourly'
         ? `${fmtPdfIls(s.base)} (x${mult})`
         : fmtPdfIls(s.base)
-      // Tips winner indicator: for hourly shifts where tips > base, mark with *
-      const tipsWon = s.jobType === 'hourly' && s.tips > s.base
-      const totalCell = tipsWon ? `${fmtPdfIls(s.total)} *` : fmtPdfIls(s.total)
+      const totalCell = fmtPdfIls(s.total)
       // Show unpaid break alongside paid hours
       const brk = s.breakMinutes ?? 0
       const hoursCell = brk > 0 ? `${fmtPdfHours(s.hours)} (-${brk}m)` : fmtPdfHours(s.hours)
@@ -503,16 +510,6 @@ export async function generateReport(
       alternateRowStyles: { fillColor: COLORS.bg },
       columnStyles,
     })
-
-    // Legend if any tips-won shifts in the period
-    const hasTipsWon = filtered.some(s => s.jobType === 'hourly' && s.tips > s.base)
-    if (hasTipsWon) {
-      const tableEnd = (doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y
-      doc.setTextColor(...COLORS.muted)
-      doc.setFont('Hebrew', 'normal')
-      doc.setFontSize(7)
-      doc.text(rev('טיפים גבוהים מהחישוב השעתי - חוק שירות וטיפים') + ' = *', pageW - marginX, tableEnd + 4, { align: 'right' })
-    }
   }
 
   // ===== FOOTER on all pages =====

@@ -15,11 +15,13 @@ export interface Shift {
   breakMinutes?: number
   /** Base pay before tips (200 for wedding regardless of hours; hours*35 for hourly) */
   base: number
-  /** Tips for the shift */
+  /** Tips for the shift — always added on top of base, for both jobs. */
   tips: number
+  /** Travel allowance for this shift (hourly job). Reimbursed on top of the wage and not taxed. */
+  travel?: number
   /** Out-of-pocket expenses (food, transport, etc.) — tracked separately, not deducted from total */
   expenses: number
-  /** base + tips for wedding, max(base, tips) for hourly — denormalized for fast sorting/filtering. */
+  /** base + tips — denormalized for fast sorting/filtering. Excludes travel (a reimbursement, not wage). */
   total: number
   /** Optional per-shift rate multiplier (default 1.0). When != 1.0, overrides OT and rest day calcs. */
   rateMultiplier?: number

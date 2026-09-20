@@ -21,6 +21,7 @@ export interface ShiftRow {
   end_time: string | null
   base: number
   tips: number
+  travel?: number | null
   expenses: number
   total: number
   rate_multiplier?: number

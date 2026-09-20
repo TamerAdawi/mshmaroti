@@ -15,8 +15,9 @@ create table public.shifts (
   end_time    text,   -- "HH:MM" or null
   base        numeric(10,2) not null check (base >= 0),
   tips        numeric(10,2) not null default 0 check (tips >= 0),
+  travel      numeric(10,2) not null default 0 check (travel >= 0), -- per-shift travel allowance (hourly job)
   expenses    numeric(10,2) not null default 0 check (expenses >= 0),
-  total       numeric(10,2) not null check (total >= 0),
+  total       numeric(10,2) not null check (total >= 0), -- base + tips (travel excluded — it is a reimbursement)
   notes       text,
   created_at  timestamptz not null default now()
 );

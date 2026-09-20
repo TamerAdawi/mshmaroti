@@ -2,7 +2,9 @@
  * Israeli labor law calculations for restaurant (hourly) job.
  * v2.2: rest day is a time window (default Sat 19:00 → Sun 19:00), not a whole day.
  * Per-shift rate multiplier overrides OT and rest day calcs when != 1.0.
- * Tips law: gross = max(hourly_calc, tips) per shift.
+ * Tips: added on top of the computed wage — gross = hourly_calc + tips per shift.
+ * v2.5: the rest-day rate is a setting (restDayMultiplier, default 150%) rather
+ * than a hardcoded +0.5, and stacks with the OT tiers the same way.
  */
 import type { Shift } from '../types'
 import type { Settings } from './settings'
@@ -12,23 +14,26 @@ import type { Settings } from './settings'
 // ===================================================================
 
 export interface ShiftPayBreakdown {
-  /** Final gross paid for the shift (after multiplier OR OT+rest day, then max with tips). */
+  /** Final gross paid for the shift: the wage (multiplier OR OT+rest day) plus tips. */
   gross: number
-  /** What the hourly calc alone produced (before tips comparison). */
+  /** What the hourly calc alone produced, before tips are added. */
   hourlyCalc: number
-  /** True if tips exceeded hourly_calc and "won" (gross = tips). */
-  tipsWon: boolean
+  /** Tips counted on top of the wage. */
+  tips: number
   /** True if rate multiplier override was applied (skips OT + rest day). */
   multiplierOverride: boolean
   /** Hours in rest day window (Sat 19:00 → Sun 19:00). */
   restDayHours: number
   /** Hours outside rest day window. */
   regularHours: number
-  /** Hours at base tier (×1.0 outside, ×1.5 inside rest day). */
+  // The tier buckets below count OT position only. Inside the rest-day window each
+  // is paid restDayMultiplier higher — ×1.0/×1.25/×1.5 becomes ×1.5/×1.75/×2.0 at
+  // the default 150%, and shifts with the setting.
+  /** Hours at base tier (×1.0 before the rest-day premium). */
   tierRegularHours: number
-  /** Hours at OT tier 1 (×1.25 outside, ×1.75 inside). */
+  /** Hours at OT tier 1 (×1.25 before the rest-day premium). */
   tierOt1Hours: number
-  /** Hours at OT tier 2 (×1.5 outside, ×2.0 inside). */
+  /** Hours at OT tier 2 (×1.5 before the rest-day premium). */
   tierOt2Hours: number
 }
 
@@ -38,7 +43,7 @@ export interface ShiftPayBreakdown {
  * Logic order:
  *   1. If rateMultiplier != 1.0 → simple: hours × rate × multiplier (no OT, no rest day).
  *   2. Otherwise → compute rest day overlap by time, apply OT tiers per hour position.
- *   3. If shift has tips and tips > hourlyCalc → gross = tips (Israeli tip law).
+ *   3. Tips are always added on top of the wage → gross = hourlyCalc + tips.
  *
  * For wedding shifts, this is a no-op (caller should use base directly).
  */
@@ -58,11 +63,10 @@ export function calcShiftPay(
   // === Branch 1: manual multiplier override ===
   if (multiplier !== 1.0) {
     const hourlyCalc = shift.hours * hourlyRate * multiplier
-    const tipsWon = tips > hourlyCalc
     return {
-      gross: Math.max(hourlyCalc, tips),
+      gross: hourlyCalc + tips,
       hourlyCalc,
-      tipsWon,
+      tips,
       multiplierOverride: true,
       restDayHours: 0,
       regularHours: shift.hours,
@@ -85,6 +89,7 @@ export function calcShiftPay(
 
   // Walk hour-by-hour, tracking position for OT tiering
   const threshold = settings.dailyHoursThreshold
+  const restDayBonus = restDayBonusOf(settings)
   let hourlyCalc = 0
   let position = 0  // 0-indexed cumulative hours into the shift
   let tierRegular = 0, tierOt1 = 0, tierOt2 = 0
@@ -105,8 +110,8 @@ export function calcShiftPay(
         tierMult = 1.5
         nextBoundary = Infinity
       }
-      // Apply rest day bonus (+0.5) if this segment is inside rest day window
-      if (seg.isRestDay) tierMult += 0.5
+      // Apply the rest-day premium if this segment is inside the rest day window
+      if (seg.isRestDay) tierMult += restDayBonus
 
       // How much of the segment falls in the current tier?
       const consume = Math.min(remaining, nextBoundary - position)
@@ -123,14 +128,13 @@ export function calcShiftPay(
     }
   }
 
-  // === Branch 3: tips vs hourly law ===
-  const tipsWon = tips > hourlyCalc
-  const gross = Math.max(hourlyCalc, tips)
+  // === Branch 3: tips are additive — they never replace the wage ===
+  const gross = hourlyCalc + tips
 
   return {
     gross,
     hourlyCalc,
-    tipsWon,
+    tips,
     multiplierOverride: false,
     restDayHours,
     regularHours,
@@ -144,7 +148,7 @@ function zeroBreakdown(hours: number): ShiftPayBreakdown {
   return {
     gross: 0,
     hourlyCalc: 0,
-    tipsWon: false,
+    tips: 0,
     multiplierOverride: false,
     restDayHours: 0,
     regularHours: hours,
@@ -164,6 +168,21 @@ function zeroBreakdown(hours: number): ShiftPayBreakdown {
 const REST_DAY_START_DAY = 6 // Saturday
 const REST_DAY_START_HOUR = 19 // 7 PM
 const REST_DAY_LENGTH_HOURS = 24
+
+/** Legal minimum rest-day rate, used when settings predate the editable one. */
+export const DEFAULT_REST_DAY_MULTIPLIER = 1.5
+
+/**
+ * How much the rest-day premium adds to an hour's OT tier.
+ * A rest-day hour pays `tier + bonus`, so at the default 150% the familiar
+ * 1.5 / 1.75 / 2.0 ladder falls out of the 1.0 / 1.25 / 1.5 OT tiers.
+ * Guarded so a missing or nonsensical setting can never reduce pay below the tier.
+ */
+export function restDayBonusOf(settings: Pick<Settings, 'restDayMultiplier'>): number {
+  const m = settings.restDayMultiplier
+  if (!Number.isFinite(m) || m < 1) return DEFAULT_REST_DAY_MULTIPLIER - 1
+  return m - 1
+}
 
 /** Returns hours of the shift that fall inside the rest day window. */
 export function calcRestDayOverlap(date: string, startTime: string, endTime: string): number {
@@ -264,6 +283,7 @@ export interface MonthlyBreakdown {
   hourlyWages: number
   hourlyHours: number
   hourlyShifts: number
+  /** Sum of the per-shift travel allowance across the month's hourly shifts. */
   hourlyTravel: number
 
   hourlyBituach: number
@@ -282,7 +302,7 @@ export function calcMonthlyBreakdown(
   settings: Settings,
 ): MonthlyBreakdown {
   let weddingTotal = 0, weddingHours = 0, weddingShifts = 0
-  let hourlyWages = 0, hourlyHours = 0, hourlyShifts = 0
+  let hourlyWages = 0, hourlyHours = 0, hourlyShifts = 0, hourlyTravel = 0
 
   for (const s of shifts) {
     if (s.jobType === 'wedding') {
@@ -290,14 +310,15 @@ export function calcMonthlyBreakdown(
       weddingHours += s.hours
       weddingShifts += 1
     } else {
-      // For hourly, total already reflects max(base, tips) per tip law
+      // For hourly, total already includes tips (wage + tips)
       hourlyWages += s.total
       hourlyHours += s.hours
       hourlyShifts += 1
+      // Travel is logged per shift and stays outside the taxable wage base.
+      hourlyTravel += s.travel ?? 0
     }
   }
 
-  const hourlyTravel = hourlyShifts > 0 ? settings.hourlyMonthlyTravel : 0
   const hourlyBituach = hourlyWages * settings.bituachRate
   const hourlyPension = settings.pensionActive ? hourlyWages * settings.pensionRate : 0
   const hourlyTax = hourlyWages * settings.incomeTaxRate
@@ -318,21 +339,29 @@ export function calcMonthlyBreakdown(
 
 // ===================================================================
 // Restaurant hours by effective multiplier (for the report)
-// Buckets each paid hour by its effective rate: 100% / 125% / 150% /
-// 175% / 200%, mirroring calcShiftPay's tiering (OT tiers + rest-day
-// +0.5). Shifts with a manual rate_multiplier are reported separately.
+// Buckets each paid hour by the rate it was actually paid at, mirroring
+// calcShiftPay's tiering (OT tiers + the rest-day premium). Which buckets
+// appear depends on the OT threshold and restDayMultiplier, so they are
+// computed rather than fixed: at the default 150% they come out as the
+// familiar 100 / 125 / 150 / 175 / 200%. Shifts with a manual
+// rate_multiplier are reported separately.
 // This is additive — it does not change calcShiftPay.
 // ===================================================================
+
+export interface TierBucket {
+  /** Effective multiplier for these hours — 1.25 means they were paid at 125%. */
+  mult: number
+  hours: number
+  /** True when these hours fell inside the rest-day window. */
+  restDay: boolean
+}
 
 export interface RestaurantTierHours {
   days: number          // distinct restaurant shift-dates
   shifts: number
   totalHours: number
-  h100: number          // ×1.0
-  h125: number          // ×1.25
-  h150: number          // ×1.5 (OT tier 2, or rest-day base)
-  h175: number          // ×1.75 (rest-day OT tier 1)
-  h200: number          // ×2.0 (rest-day OT tier 2)
+  /** Hours grouped by what they actually paid, ascending by multiplier. */
+  tiers: TierBucket[]
   overrideHours: number // hours on shifts with a manual rate_multiplier
   overrides: { mult: number; hours: number }[]
 }
@@ -341,9 +370,21 @@ export function monthlyRestaurantTiers(shifts: Shift[], settings: Settings): Res
   const hourly = shifts.filter((s) => s.jobType === 'hourly')
   const days = new Set(hourly.map((s) => s.date)).size
   const threshold = settings.dailyHoursThreshold
+  const restDayBonus = restDayBonusOf(settings)
   let totalHours = 0
-  let h100 = 0, h125 = 0, h150 = 0, h175 = 0, h200 = 0, overrideHours = 0
+  let overrideHours = 0
   const overrideMap = new Map<number, number>()
+  // Keyed by multiplier + whether it was a rest-day hour, so the report can say
+  // "150% rest day" and "150% overtime" apart even when they pay the same.
+  const tierMap = new Map<string, TierBucket>()
+  const addTier = (mult: number, restDay: boolean, hours: number) => {
+    // Round the key so floating-point noise can't split one rate into two rows.
+    const rounded = Math.round(mult * 10000) / 10000
+    const key = `${rounded}|${restDay}`
+    const bucket = tierMap.get(key)
+    if (bucket) bucket.hours += hours
+    else tierMap.set(key, { mult: rounded, hours, restDay })
+  }
 
   for (const s of hourly) {
     totalHours += s.hours
@@ -373,13 +414,9 @@ export function monthlyRestaurantTiers(shifts: Shift[], settings: Settings): Res
           baseMult = 1.5
           nextBoundary = Infinity
         }
-        const eff = baseMult + (seg.isRestDay ? 0.5 : 0)
+        const eff = baseMult + (seg.isRestDay ? restDayBonus : 0)
         const consume = Math.min(remaining, nextBoundary - position)
-        if (eff === 1.0) h100 += consume
-        else if (eff === 1.25) h125 += consume
-        else if (eff === 1.5) h150 += consume
-        else if (eff === 1.75) h175 += consume
-        else h200 += consume // eff === 2.0
+        addTier(eff, seg.isRestDay, consume)
         position += consume
         remaining -= consume
       }
@@ -390,7 +427,10 @@ export function monthlyRestaurantTiers(shifts: Shift[], settings: Settings): Res
     days,
     shifts: hourly.length,
     totalHours,
-    h100, h125, h150, h175, h200,
+    // Ascending by rate; rest-day hours last within the same rate.
+    tiers: [...tierMap.values()].sort(
+      (a, b) => a.mult - b.mult || Number(a.restDay) - Number(b.restDay),
+    ),
     overrideHours,
     overrides: [...overrideMap.entries()].map(([mult, hours]) => ({ mult, hours })),
   }

@@ -9,7 +9,9 @@ Supabase project **cleanly, read-only, and without coupling to Mshmaroti's inter
 > - Mshmaroti stays untouched: additive + read-only only.
 
 Supabase project: `https://rqozlxefqyhwxxgfhviq.supabase.co`
-Live migration state: **v2.0 + v2.1 + v2.2 applied; v2.3 NOT applied** (the `shifts.break_minutes` column does **not** exist in the live DB — do not reference it).
+Live migration state (as audited): **v2.0 + v2.1 + v2.2 applied; v2.3, v2.4 and v2.5 NOT applied** — `shifts.break_minutes`, `shifts.travel` and `user_settings.rest_day_multiplier` do not exist in the live DB, so do not reference them. Re-check before relying on this: v2.4 and v2.5 are new and may have been applied since.
+
+> **⚠️ v2.4 changed what `total` means for restaurant shifts.** It used to be `max(base, tips)`; it is now `base + tips` — tips are added on top of the wage instead of competing with it. Shifts written before v2.4 still hold the old frozen value unless the optional backfill in `supabase/migration_v2.4.sql` has been run. See §2.
 
 ---
 
@@ -27,14 +29,16 @@ All income lives in **one table: `public.shifts`** (one row per shift). Settings
 | `hours` | `numeric(5,2)` | paid hours |
 | `base` | `numeric(10,2)` | pre-tip pay. Wedding = flat daily rate; restaurant = labor-law wage (see §2) |
 | `tips` | `numeric(10,2)` | tips for that shift |
-| `total` | `numeric(10,2)` | **canonical pay for the shift.** Wedding = `base + tips`; restaurant = `max(base, tips)` |
+| `total` | `numeric(10,2)` | **canonical pay for the shift.** `base + tips` for both jobs since v2.4 (restaurant was `max(base, tips)` before). Excludes travel. |
 | `rate_multiplier` | `numeric(5,2)` default 1.0 | per-shift override (restaurant only) |
 | `expenses` | `numeric(10,2)` default 0 | out-of-pocket; **NOT** part of income/`total` |
 | `start_time`,`end_time` | `text` `"HH:MM"` nullable | shift window (used for OT/rest-day math) |
 | `created_at` | `timestamptz` default now() | insert timestamp (ordering only — **not** a financial date) |
 
 Indexes: `(user_id, date desc)`, `(user_id, job_type)`. RLS enabled (see §4).
-(There is also `notes text`. The `break_minutes` column exists only in source migration v2.3 and is **absent live** — ignore it.)
+(There is also `notes text`. The `break_minutes` (v2.3) and `travel` (v2.4) columns exist only in the source migrations and are **absent live** — ignore them until those migrations are run.)
+
+`travel` (v2.4), when present, is a per-shift travel reimbursement on restaurant shifts. It is **not** part of `total` — treat it as an expense reimbursement, not income, or you will double-count against a payslip.
 
 ### The three income sources → exact `table.column`
 1. **Wedding-hall pay per month** → `public.shifts.total` where `job_type = 'wedding'`, summed per month of `date`. (`total` = flat base + tips.)
@@ -46,7 +50,8 @@ Indexes: `(user_id, date desc)`, `(user_id, job_type)`. RLS enabled (see §4).
 `user_id uuid PK`, `wedding_rate numeric(10,2)` (flat wedding daily rate), `hourly_rate numeric(10,2)`,
 `hourly_monthly_travel numeric(10,2)` (default 150), `bituach_rate numeric(7,6)` (default 0.0427),
 `pension_rate numeric(7,6)` (default 0.06), `pension_active boolean`, `income_tax_rate numeric(7,6)` (default 0),
-`rest_day_of_week int` (0=Sun), `daily_hours_threshold numeric(5,2)` (default 8), `weekly_hours_max numeric(5,2)`.
+`rest_day_of_week int` (0=Sun), `daily_hours_threshold numeric(5,2)` (default 8), `weekly_hours_max numeric(5,2)`,
+`rest_day_multiplier numeric(5,2)` (v2.5, default 1.5 — absent until that migration runs).
 All confirmed present live.
 
 ---
@@ -73,12 +78,17 @@ Per shift, `calcShiftPay()` produces `base` (the wage, called `hourlyCalc`) and 
 - **If `rate_multiplier ≠ 1.0`** → simple override: `wage = hours × hourly_rate × rate_multiplier` (no OT, no rest-day).
 - **Otherwise** → hour-by-hour tiers using `daily_hours_threshold` (default 8):
   - hours `≤ threshold`: ×1.0; next 2 h: ×1.25; beyond: ×1.5.
-  - Hours that fall inside the **rest-day window** get **+0.5** added to their tier multiplier. The window is **Saturday 19:00 → Sunday 19:00** (24 h), computed by clock overlap with `start_time`/`end_time`. (Note: the per-shift code uses this fixed Sat-19:00 window; `user_settings.rest_day_of_week` exists but the shipped per-shift calc uses the Saturday window.)
-- **Tip law:** `total = max(wage, tips)` — you get the higher of computed wages or tips, per shift. `base = wage`.
+  - Hours that fall inside the **rest-day window** get **`rest_day_multiplier − 1`** added to their tier multiplier (v2.5; default `1.5`, so +0.5 and the familiar 150/175/200% ladder). The window is **Saturday 19:00 → Sunday 19:00** (24 h), computed by clock overlap with `start_time`/`end_time`. (Note: the per-shift code uses this fixed Sat-19:00 window; `user_settings.rest_day_of_week` exists but the shipped per-shift calc uses the Saturday window.)
+  - Since the rate is a setting, **don't assume the 150/175/200 ladder** if you re-derive wages yourself — read `user_settings.rest_day_multiplier`, falling back to `1.5` when the column is absent. Summing `shifts.total` avoids the question entirely and is still the recommended route.
+- **Tips (v2.4 onward):** `total = wage + tips` — tips are kept on top of the wage. `base = wage`.
+  - **Before v2.4** the rule was `total = max(wage, tips)`. Rows written under the old rule keep that frozen value, so a month can mix both conventions. `total <> base + tips` on an `hourly` row identifies a pre-v2.4 row whose tips were swallowed.
 - **Monthly gross wages** = `SUM(total)` over `job_type='hourly'`. ← this is the recommended "expected" figure.
 - **Monthly net** (shown in the Gross-vs-Net tile, `calcMonthlyBreakdown`):
-  `net = gross + hourly_monthly_travel − gross×bituach_rate − (pension_active ? gross×pension_rate : 0) − gross×income_tax_rate`.
-  Travel is a flat monthly add (once, if there's ≥1 restaurant shift). **Net needs `user_settings`; gross needs only `shifts`.**
+  `net = gross + travel − gross×bituach_rate − (pension_active ? gross×pension_rate : 0) − gross×income_tax_rate`,
+  where `travel = SUM(shifts.travel)` over the month's `hourly` rows.
+  **As of v2.4 travel is per shift**, summed from `shifts.travel`; it used to be the flat monthly
+  `user_settings.hourly_monthly_travel` (that column still exists but the app no longer reads it).
+  **Net needs `user_settings` for the rates; gross and travel need only `shifts`.**
 
 ---
 
@@ -142,7 +152,7 @@ group by user_id, (date - (extract(dow from date)::int));
 grant select on public.v_tips_weekly to authenticated;
 
 -- 3) Monthly restaurant GROSS expected pay, per user
---    expected_amount = sum of per-shift labor-law totals (max(wage, tips)).
+--    expected_amount = sum of per-shift labor-law totals (wage + tips as of v2.4).
 --    Pre travel/deductions; feeds an expected-vs-actual payslip check later.
 create or replace view public.v_restaurant_pay_monthly
   with (security_invoker = true) as
@@ -181,7 +191,7 @@ Verified live (anon key, no session → `[]`, i.e. readable but RLS returns no r
 - ❌ **Forgetting `grant select … to authenticated`** → `permission denied for view` / 401 from PostgREST.
 - ⚠️ **Schema cache:** after `create view`, PostgREST may briefly 404 (`PGRST205`) until it reloads. Supabase usually auto-reloads on DDL; otherwise run `notify pgrst, 'reload schema';`.
 - ℹ️ **anon (logged-out) reads return empty**, not an error (`auth.uid()` is null → no rows match). Expected; Juzdani must be signed in.
-- ℹ️ Don't reference `shifts.break_minutes` from Juzdani — it's not in the live DB (would 400 with `42703`).
+- ℹ️ Don't reference `shifts.break_minutes` or `shifts.travel` from Juzdani until migrations v2.3 / v2.4 have been run — they're not in the live DB (would 400 with `42703`).
 
 ---
 

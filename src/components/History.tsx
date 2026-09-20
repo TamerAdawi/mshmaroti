@@ -113,6 +113,11 @@ export default function History({ onEdit }: { onEdit: (s: Shift) => void }) {
                         {t.tile.tips} {fmtIls(s.tips)}
                       </span>
                     )}
+                    {(s.travel ?? 0) > 0 && (
+                      <span className="chip chip-violet px-1.5 py-0 text-[10px]">
+                        {t.tile.travel} {fmtIls(s.travel ?? 0)}
+                      </span>
+                    )}
                     {(s.expenses ?? 0) > 0 && (
                       <span className="chip chip-peach px-1.5 py-0 text-[10px]">
                         {t.tile.expenses} {fmtIls(s.expenses)}

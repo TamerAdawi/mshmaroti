@@ -52,8 +52,9 @@ function sortShifts() {
   shifts.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.createdAt - a.createdAt))
 }
 
-function computeTotal(input: Pick<Shift, 'jobType' | 'base' | 'tips'>): number {
-  return input.jobType === 'wedding' ? input.base + input.tips : Math.max(input.base, input.tips)
+/** Tips are additive for both jobs; travel is a reimbursement and stays out of `total`. */
+function computeTotal(input: Pick<Shift, 'base' | 'tips'>): number {
+  return input.base + input.tips
 }
 
 export function addDemoShift(input: Omit<Shift, 'id' | 'total' | 'createdAt'>): number {
@@ -84,6 +85,9 @@ export function clearDemoShifts(): void {
 // ---- seed: one realistic month across both jobs ----
 const pad = (n: number) => String(n).padStart(2, '0')
 
+/** Travel reimbursement seeded on each restaurant shift (bus fare, both ways). */
+const DEMO_TRAVEL = 12
+
 /** Build a shift with pay computed by the real payroll engine. */
 function make(date: string, job: 'wedding' | 'hourly', start: string, end: string, tips: number, notes?: string): Shift {
   const hours = hoursBetween(start, end) ?? 0
@@ -97,9 +101,10 @@ function make(date: string, job: 'wedding' | 'hourly', start: string, end: strin
       settings,
     ).hourlyCalc
   }
-  const total = job === 'wedding' ? base + tips : Math.max(base, tips)
+  const total = base + tips
+  const travel = job === 'hourly' ? DEMO_TRAVEL : 0
   const id = nextId++
-  return { id, date, jobType: job, startTime: start, endTime: end, hours, base, tips, expenses: 0, total, rateMultiplier: 1, notes, createdAt: id }
+  return { id, date, jobType: job, startTime: start, endTime: end, hours, base, tips, travel, expenses: 0, total, rateMultiplier: 1, notes, createdAt: id }
 }
 
 function seed(): void {

@@ -4,6 +4,8 @@ import {
   calcRestDayOverlap,
   calcMonthlyBreakdown,
   monthlyRestaurantTiers,
+  restBreakMinutes,
+  paidHours,
 } from './payroll'
 import type { Settings } from './settings'
 import type { Shift } from '../types'
@@ -281,5 +283,44 @@ describe('monthlyRestaurantTiers', () => {
     const tiers = monthlyRestaurantTiers(month, S)
     const mults = tiers.tiers.map((b) => b.mult)
     expect(mults).toEqual([...mults].sort((a, b) => a - b))
+  })
+})
+
+describe('automatic rest break (hourly shifts over 6h)', () => {
+  it('deducts nothing at or under 6 hours', () => {
+    expect(restBreakMinutes(5)).toBe(0)
+    expect(restBreakMinutes(6)).toBe(0) // exactly 6:00 is not "longer than 6"
+  })
+
+  it('deducts 30 minutes once the shift runs past 6 hours', () => {
+    expect(restBreakMinutes(6.02)).toBe(30) // 6:01, as hoursBetween rounds it
+    expect(restBreakMinutes(11)).toBe(30)
+  })
+
+  it('treats 30 minutes as a floor, keeping a longer logged break', () => {
+    expect(restBreakMinutes(8, 45)).toBe(45)
+    expect(restBreakMinutes(8, 20)).toBe(30) // a shorter logged break is topped up
+    expect(restBreakMinutes(5, 20)).toBe(20) // under 6h a logged break still counts
+  })
+
+  it('ignores nonsense logged values', () => {
+    expect(restBreakMinutes(8, -10)).toBe(30)
+    expect(restBreakMinutes(5, Number.NaN)).toBe(0)
+  })
+
+  it('computes paid hours the way the form does', () => {
+    expect(paidHours(6.57, 30)).toBeCloseTo(6.07, 6) // 18:00 → 00:34
+    expect(paidHours(11, 30)).toBeCloseTo(10.5, 6)
+    expect(paidHours(5, 0)).toBe(5)
+  })
+
+  it('prices a long shift on the paid hours, not the span', () => {
+    // 15:00 → 02:00 is 11h on the clock; with the break, 10.5h are paid:
+    // 8@100 + 2@125 + 0.5@150 = 280 + 87.5 + 26.25 = 393.75
+    const span = 11
+    const hours = paidHours(span, restBreakMinutes(span))
+    const b = calcShiftPay(hourly({ startTime: '15:00', endTime: '02:00', hours }), RATE, S)
+    expect(b.hourlyCalc).toBeCloseTo(393.75, 4)
+    expect(b.tierOt2Hours).toBeCloseTo(0.5, 4)
   })
 })

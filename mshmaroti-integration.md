@@ -28,7 +28,7 @@ All income lives in **one table: `public.shifts`** (one row per shift). Settings
 | `user_id` | `uuid` (FK `auth.users.id`, on delete cascade) | row owner |
 | `date` | `date` | **the calendar date the shift was worked** (the date to filter income on) |
 | `job_type` | `text` CHECK in (`'wedding'`,`'hourly'`) | `'wedding'` = wedding hall, `'hourly'` = restaurant |
-| `hours` | `numeric(5,2)` | paid hours |
+| `hours` | `numeric(5,2)` | **paid** hours = start→end span − `break_minutes`. Hourly shifts over 6h always carry a break of ≥ 30 min (since 2026-10-03). |
 | `base` | `numeric(10,2)` | pre-tip pay. Wedding = flat daily rate; restaurant = labor-law wage (see §2) |
 | `tips` | `numeric(10,2)` | tips for that shift |
 | `total` | `numeric(10,2)` | **canonical pay for the shift.** `base + tips` for both jobs since v2.4 (restaurant was `max(base, tips)` before). Excludes travel. |
@@ -38,7 +38,9 @@ All income lives in **one table: `public.shifts`** (one row per shift). Settings
 | `created_at` | `timestamptz` default now() | insert timestamp (ordering only — **not** a financial date) |
 
 Indexes: `(user_id, date desc)`, `(user_id, job_type)`. RLS enabled (see §4).
-(There is also `notes text`. The `break_minutes` (v2.3) and `travel` (v2.4) columns exist only in the source migrations and are **absent live** — ignore them until those migrations are run.)
+(There is also `notes text`, plus `break_minutes` (v2.3, unpaid break, already subtracted from `hours`) and `travel` (v2.4) — both live.)
+
+**Rest-break backfill (2026-10-03):** 15 past hourly shifts over 6 hours had 30 minutes deducted and were re-priced; `hours`, `base` and `total` all dropped (−₪351.68 combined). Each was re-priced at the hourly rate and rest-day % that produced its original pay, not at current settings. Any Juzdani figures cached before that date for those shifts are stale.
 
 `travel` (v2.4), when present, is a per-shift travel reimbursement on restaurant shifts. It is **not** part of `total` — treat it as an expense reimbursement, not income, or you will double-count against a payslip.
 
@@ -193,7 +195,7 @@ Verified live (anon key, no session → `[]`, i.e. readable but RLS returns no r
 - ❌ **Forgetting `grant select … to authenticated`** → `permission denied for view` / 401 from PostgREST.
 - ⚠️ **Schema cache:** after `create view`, PostgREST may briefly 404 (`PGRST205`) until it reloads. Supabase usually auto-reloads on DDL; otherwise run `notify pgrst, 'reload schema';`.
 - ℹ️ **anon (logged-out) reads return empty**, not an error (`auth.uid()` is null → no rows match). Expected; Juzdani must be signed in.
-- ℹ️ Don't reference `shifts.break_minutes` or `shifts.travel` from Juzdani until migrations v2.3 / v2.4 have been run — they're not in the live DB (would 400 with `42703`).
+- ℹ️ `shifts.break_minutes` and `shifts.travel` are live and safe to read. `hours` is already net of the break — don't subtract it again.
 
 ---
 

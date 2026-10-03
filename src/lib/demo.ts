@@ -7,7 +7,7 @@
 // ===================================================================
 import type { Shift } from '../types'
 import { DEFAULT_SETTINGS, type Settings } from './settings'
-import { calcShiftPay } from './payroll'
+import { calcShiftPay, paidHours, restBreakMinutes } from './payroll'
 import { hoursBetween } from './utils'
 
 const KEY = 'mshmaroti-demo'
@@ -90,7 +90,10 @@ const DEMO_TRAVEL = 12
 
 /** Build a shift with pay computed by the real payroll engine. */
 function make(date: string, job: 'wedding' | 'hourly', start: string, end: string, tips: number, notes?: string): Shift {
-  const hours = hoursBetween(start, end) ?? 0
+  const span = hoursBetween(start, end) ?? 0
+  // Hourly shifts over 6 hours carry the automatic unpaid rest break, same as the form.
+  const breakMinutes = job === 'hourly' ? restBreakMinutes(span) : 0
+  const hours = paidHours(span, breakMinutes)
   let base: number
   if (job === 'wedding') {
     base = settings.weddingRate
@@ -104,7 +107,7 @@ function make(date: string, job: 'wedding' | 'hourly', start: string, end: strin
   const total = base + tips
   const travel = job === 'hourly' ? DEMO_TRAVEL : 0
   const id = nextId++
-  return { id, date, jobType: job, startTime: start, endTime: end, hours, base, tips, travel, expenses: 0, total, rateMultiplier: 1, notes, createdAt: id }
+  return { id, date, jobType: job, startTime: start, endTime: end, hours, breakMinutes, base, tips, travel, expenses: 0, total, rateMultiplier: 1, notes, createdAt: id }
 }
 
 function seed(): void {
@@ -123,7 +126,7 @@ function seed(): void {
     if (d === 0) out.push(make(iso(day), 'hourly', '16:00', '23:00', 0))
     if (d === 2) out.push(make(iso(day), 'hourly', '16:00', '23:00', 90))
     if (d === 3) {
-      // one long overtime shift crossing midnight (15:00 → 02:00 = 11h → 8@100/2@125/1@150)
+      // one long overtime shift crossing midnight (15:00 → 02:00 = 11h, minus the 30-min rest break → 10.5h paid: 8@100/2@125/0.5@150)
       if (!longDone) {
         out.push(make(iso(day), 'hourly', '15:00', '02:00', 120, 'ערב עמוס'))
         longDone = true

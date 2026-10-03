@@ -159,6 +159,35 @@ function zeroBreakdown(hours: number): ShiftPayBreakdown {
 }
 
 // ===================================================================
+// Mandatory rest break (hourly job)
+// Any hourly shift longer than 6 hours (start → end) carries an unpaid
+// 30-minute rest break. It is a floor, not an addition: if a longer break
+// was logged, that one stands. Shared by the shift form, the demo seed and
+// the historical backfill so all three price a shift identically.
+// ===================================================================
+
+/** Shifts longer than this, start → end in hours, get the automatic rest break. */
+export const REST_BREAK_AFTER_HOURS = 6
+/** Unpaid rest break deducted from those shifts, in minutes. */
+export const REST_BREAK_MINUTES = 30
+
+/**
+ * Unpaid break to deduct from an hourly shift: whatever was logged, but never
+ * less than the automatic rest break once the shift runs past 6 hours.
+ * A shift of exactly 6:00 gets no automatic break; 6:01 does.
+ */
+export function restBreakMinutes(spanHours: number, loggedMinutes = 0): number {
+  const logged = Number.isFinite(loggedMinutes) && loggedMinutes > 0 ? Math.floor(loggedMinutes) : 0
+  const auto = spanHours - REST_BREAK_AFTER_HOURS > 1e-9 ? REST_BREAK_MINUTES : 0
+  return Math.max(logged, auto)
+}
+
+/** Paid hours for a start → end span after an unpaid break, rounded to 2 decimals like the form. */
+export function paidHours(spanHours: number, breakMinutes: number): number {
+  return Math.round((spanHours - breakMinutes / 60) * 100) / 100
+}
+
+// ===================================================================
 // Rest day window math
 // Rest day window: Saturday 19:00 → Sunday 19:00 (24 hours).
 // We anchor the window to the Saturday of the week containing the shift,

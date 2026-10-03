@@ -28,7 +28,7 @@ and a dashboard built around a single comparison: **effective ₪/hour across bo
 | Charts | Recharts 2.15 |
 | PDF | jsPDF + jspdf-autotable (hand-rolled RTL) |
 | PWA | vite-plugin-pwa (Workbox) |
-| Tests | Vitest 4 (43 tests over the pure payroll/calc/date logic) |
+| Tests | Vitest 4 (49 tests over the pure payroll/calc/date logic) |
 | CI / deploy | GitHub Actions → typecheck + tests, and build → GitHub Pages |
 | Tooling | Playwright (headless, generates the marketing carousel + OG image) |
 
@@ -37,7 +37,7 @@ and a dashboard built around a single comparison: **effective ₪/hour across bo
 - **~4,760 LOC** of app TypeScript/TSX, **~325 LOC** of tests
 - **16 components** (8 screens/shared + 8 dashboard tiles), **11 lib modules**, **4 hooks**
 - **2 Postgres tables** (`shifts`, `user_settings`), RLS on both
-- **43 unit tests** on the money math, running in CI on every push
+- **49 unit tests** on the money math, running in CI on every push
 
 ## Architecture
 
@@ -118,6 +118,18 @@ dashboard compares) and is added untaxed at the monthly-net step in `calcMonthly
 ### Shifts cross midnight, so "hours" is derived, not typed
 `hoursBetween("20:00", "02:30")` returns 6.5 by adding a day when `end ≤ start`. A single invariant covers the
 overwhelming majority of hospitality shifts without an explicit "crossed midnight" checkbox.
+
+### Long hourly shifts carry an automatic unpaid rest break
+Any hourly shift longer than 6 hours (start → end) has 30 minutes deducted as an unpaid rest break, so a 16:00 →
+23:00 shift pays 6.5 hours. It's a floor, not an addition: a longer break you log yourself stands, a shorter one
+is topped up to 30, and exactly 6:00 gets nothing. Overtime is counted on the *paid* hours, so the break can pull
+a shift back under the 8-hour threshold. The rule is one function, `restBreakMinutes()` in `payroll.ts`, shared by
+the form, the demo seed and the backfill that applied it to past shifts — so all three price a shift the same.
+
+That backfill had to respect frozen pay: the hourly rate (₪35 → ₪45) and the rest-day rate (150% → 100%) had both
+changed since some shifts were saved. Each shift was re-priced at the rate and rest-day % that reproduce its
+*stored* pay to the cent — never at today's settings — and any shift that couldn't be reproduced would have been
+left alone (none were).
 
 ### Light/dark without `dark:` everywhere
 Neutral colours are CSS variables (RGB triplets) that flip under a `.dark` class, so `text-ink` / `bg-surface`

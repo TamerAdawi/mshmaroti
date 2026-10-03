@@ -4,7 +4,7 @@ import type { JobType, Shift } from '../types'
 import { t } from '../strings'
 import { cn, fmtIls, fmtHours, hoursBetween, todayIso } from '../lib/utils'
 import { useSettings } from '../hooks/useSettings'
-import { calcShiftPay, restDayBonusOf } from '../lib/payroll'
+import { calcShiftPay, paidHours, restBreakMinutes, restDayBonusOf } from '../lib/payroll'
 
 type Mode = 'time' | 'hours'
 
@@ -31,7 +31,17 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
   // to travelled, since you normally do.
   const [travelled, setTravelled] = useState(editing ? (editing.travel ?? 0) > 0 : true)
   const [expensesInput, setExpensesInput] = useState(editing && (editing.expenses ?? 0) > 0 ? String(editing.expenses) : '')
-  const [breakInput, setBreakInput] = useState(editing && (editing.breakMinutes ?? 0) > 0 ? String(editing.breakMinutes) : '')
+  // The break field holds only a break the user logged on top of the automatic
+  // rest break. When editing, the automatic part is re-derived from the times, so
+  // only a longer, hand-logged break goes back into the field — otherwise a shift
+  // shortened below 6h while editing would keep a stale 30-minute deduction.
+  const [breakInput, setBreakInput] = useState(() => {
+    const stored = editing?.breakMinutes ?? 0
+    if (stored <= 0) return ''
+    const span = editing?.startTime && editing?.endTime ? hoursBetween(editing.startTime, editing.endTime) : null
+    const auto = span !== null && editing?.jobType === 'hourly' ? restBreakMinutes(span) : 0
+    return stored > auto ? String(stored) : ''
+  })
   const [multiplierInput, setMultiplierInput] = useState(
     editing?.rateMultiplier && editing.rateMultiplier !== 1.0 ? String(editing.rateMultiplier) : '1'
   )
@@ -44,23 +54,36 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
     if (jobType === 'hourly' && mode === 'hours') setMode('time')
   }, [jobType, mode])
 
-  // Unpaid break in minutes — only applies to the hourly job.
-  const breakMinutes = useMemo(() => {
+  // Start → end span, before any break.
+  const spanHours = useMemo(
+    () => (mode === 'time' ? hoursBetween(startTime, endTime) : null),
+    [mode, startTime, endTime],
+  )
+
+  // Break the user typed in — only applies to the hourly job.
+  const loggedBreak = useMemo(() => {
     if (jobType !== 'hourly') return 0
     const n = Number(breakInput)
     return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
   }, [jobType, breakInput])
 
+  // Unpaid break actually deducted: the logged break, but at least the automatic
+  // 30-minute rest break once an hourly shift runs past 6 hours.
+  const breakMinutes = useMemo(() => {
+    if (jobType !== 'hourly') return 0
+    return spanHours !== null ? restBreakMinutes(spanHours, loggedBreak) : loggedBreak
+  }, [jobType, spanHours, loggedBreak])
+  const autoBreakApplied = breakMinutes > loggedBreak
+
   const computedHours = useMemo(() => {
     if (mode === 'time') {
-      const span = hoursBetween(startTime, endTime)
-      if (span === null) return null
-      const net = Math.round((span - breakMinutes / 60) * 100) / 100
+      if (spanHours === null) return null
+      const net = paidHours(spanHours, breakMinutes)
       return net > 0 ? net : null
     }
     const n = Number(hoursInput)
     return Number.isFinite(n) && n > 0 ? n : null
-  }, [mode, startTime, endTime, hoursInput, breakMinutes])
+  }, [mode, spanHours, hoursInput, breakMinutes])
 
   const isOvernight = useMemo(() => {
     if (mode !== 'time') return false
@@ -241,7 +264,11 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
                 onChange={(e) => setBreakInput(e.target.value)}
                 className="input-field tabular-nums"
               />
-              <div className="text-[11px] text-muted mt-1 px-1">{t.form.breakHint}</div>
+              <div className="text-[11px] text-muted mt-1 px-1">
+                {autoBreakApplied
+                  ? t.form.breakAuto.replace('{m}', String(breakMinutes))
+                  : t.form.breakHint}
+              </div>
             </Field>
           )}
 

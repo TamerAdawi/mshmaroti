@@ -28,7 +28,7 @@ and a dashboard built around a single comparison: **effective ₪/hour across bo
 | Charts | Recharts 2.15 |
 | PDF | jsPDF + jspdf-autotable (hand-rolled RTL) |
 | PWA | vite-plugin-pwa (Workbox) |
-| Tests | Vitest 4 (49 tests over the pure payroll/calc/date logic) |
+| Tests | Vitest 4 (52 tests over the pure payroll/calc/date logic) |
 | CI / deploy | GitHub Actions → typecheck + tests, and build → GitHub Pages |
 | Tooling | Playwright (headless, generates the marketing carousel + OG image) |
 
@@ -37,7 +37,7 @@ and a dashboard built around a single comparison: **effective ₪/hour across bo
 - **~4,760 LOC** of app TypeScript/TSX, **~325 LOC** of tests
 - **16 components** (8 screens/shared + 8 dashboard tiles), **11 lib modules**, **4 hooks**
 - **2 Postgres tables** (`shifts`, `user_settings`), RLS on both
-- **49 unit tests** on the money math, running in CI on every push
+- **52 unit tests** on the money math, running in CI on every push
 
 ## Architecture
 
@@ -118,6 +118,18 @@ dashboard compares) and is added untaxed at the monthly-net step in `calcMonthly
 ### Shifts cross midnight, so "hours" is derived, not typed
 `hoursBetween("20:00", "02:30")` returns 6.5 by adding a day when `end ≤ start`. A single invariant covers the
 overwhelming majority of hospitality shifts without an explicit "crossed midnight" checkbox.
+
+### One app, many workers: the setup page decides what each person sees
+Anyone with the link can sign up. A new account lands on a one-time setup page: wedding hall, hourly, or both,
+plus what each pays and an optional name for each job. That choice (`user_settings.jobs`) drives the whole app —
+a single-job worker never sees a job picker, the "which job pays more" comparison, the job split or hours-per-job,
+History's job filter, or Report's job selector; Settings only shows their job's fields. It can be changed later in
+Settings, and shifts from a removed job are kept and still shown.
+
+Each worker's data stays private to them (row-level security, as before). `onboarded` was added with a default of
+`true` and then flipped to `false`, so accounts that existed before the change skip setup entirely, while every
+new sign-up goes through it. The app decides only once real settings have loaded, so nobody glimpses the wrong
+screen, and the setup save is non-optimistic: if it fails, the worker stays on the page with an error.
 
 ### Long hourly shifts carry an automatic unpaid rest break
 Any hourly shift longer than 6 hours (start → end) has 30 minutes deducted as an unpaid rest break, so a 16:00 →

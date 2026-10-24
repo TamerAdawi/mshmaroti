@@ -33,7 +33,9 @@ export default function RecentTile({ shifts, onEdit }: { shifts: Shift[]; onEdit
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm mb-0.5">
                       <span className="text-muted tabular-nums shrink-0 text-xs">{fmtDateShort(s.date)}</span>
-                      <span className={cn('chip text-[10px] px-2 py-0.5', chipClass)}>{jobName}</span>
+                      {(settings.jobs === 'both' || s.jobType !== settings.jobs) && (
+                        <span className={cn('chip text-[10px] px-2 py-0.5', chipClass)}>{jobName}</span>
+                      )}
                     </div>
                     <div className="text-[11px] text-muted flex items-center gap-2 flex-wrap">
                       <span>{fmtHours(s.hours)}</span>

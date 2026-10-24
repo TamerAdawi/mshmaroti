@@ -55,7 +55,10 @@ Indexes: `(user_id, date desc)`, `(user_id, job_type)`. RLS enabled (see §4).
 `hourly_monthly_travel numeric(10,2)` (default 150), `bituach_rate numeric(7,6)` (default 0.0427),
 `pension_rate numeric(7,6)` (default 0.06), `pension_active boolean`, `income_tax_rate numeric(7,6)` (default 0),
 `rest_day_of_week int` (0=Sun), `daily_hours_threshold numeric(5,2)` (default 8), `weekly_hours_max numeric(5,2)`,
-`rest_day_multiplier numeric(5,2)` (v2.5, default 1.5 — absent until that migration runs).
+`rest_day_multiplier numeric(5,2)` (v2.5, default 1.5), `travel_per_shift numeric(10,2)` (v2.6),
+`jobs text` (v2.7: `'wedding' | 'hourly' | 'both'`) and `onboarded boolean` (v2.7). Since v2.7 the app is shared
+between workers: each account sees only its own rows via RLS, so Juzdani signed in as one user still sees only that
+user's income.
 All confirmed present live.
 
 ---

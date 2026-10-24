@@ -49,6 +49,13 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // A worker with a single job never picks one: new shifts are always that job.
+  // (Settings load asynchronously, so this applies once they arrive.)
+  const singleJob = settings.jobs !== 'both'
+  useEffect(() => {
+    if (!editing && settings.jobs !== 'both') setJobType(settings.jobs)
+  }, [editing, settings.jobs])
+
   // Force time mode when hourly — required for accurate rest day window calc
   useEffect(() => {
     if (jobType === 'hourly' && mode === 'hours') setMode('time')
@@ -201,6 +208,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" />
           </Field>
 
+          {!singleJob && (
           <Field label={t.form.jobType}>
             <div className="grid grid-cols-2 gap-2">
               <JobChip
@@ -219,7 +227,10 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
               />
             </div>
           </Field>
+          )}
 
+          {/* Hourly shifts always need start/end times, so an hourly-only worker has no choice to make here. */}
+          {settings.jobs !== 'hourly' && (
           <Field label={t.form.inputMode}>
             <div className="flex gap-1 p-1 bg-elevate rounded-xl border border-line">
               <ModeButton active={mode === 'time'} onClick={() => setMode('time')} label={t.form.modeTime} />
@@ -236,6 +247,7 @@ export default function NewShift({ editing, onDone, onCancel }: Props) {
               </div>
             )}
           </Field>
+          )}
 
           {mode === 'time' ? (
             <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '../hooks/useSettings'
-import { DEFAULT_SETTINGS } from '../lib/settings'
+import { DEFAULT_SETTINGS, hasJob, type Jobs } from '../lib/settings'
 import { clearAll } from '../lib/api'
 import { exportCsv, exportJson, downloadBlob, importJsonFile, makeFilename } from '../lib/export'
 import { useAuth } from '../lib/auth'
@@ -67,6 +67,23 @@ export default function Settings() {
         </div>
       </section>
 
+      <section className="tile p-5 space-y-3">
+        <div>
+          <div className="label">{t.settings.myJobs}</div>
+          <div className="text-xs text-muted mt-1">{t.settings.myJobsHint}</div>
+        </div>
+        <div className="flex gap-1 p-1 bg-elevate rounded-xl border border-line" role="radiogroup">
+          {(['wedding', 'hourly', 'both'] as Jobs[]).map((j) => (
+            <ThemeButton
+              key={j}
+              active={draft.jobs === j}
+              onClick={() => setDraft({ ...draft, jobs: j })}
+              label={j === 'wedding' ? t.onboarding.weddingTitle : j === 'hourly' ? t.onboarding.hourlyTitle : t.onboarding.bothTitle}
+            />
+          ))}
+        </div>
+      </section>
+
       <section className="tile p-5 space-y-4">
         <div>
           <div className="label">{t.settings.rates}</div>
@@ -74,22 +91,31 @@ export default function Settings() {
         </div>
 
         <div className="space-y-3">
-          <Field label={t.settings.weddingName}>
-            <input type="text" value={draft.weddingName} onChange={(e) => setDraft({ ...draft, weddingName: e.target.value })} className="input-field" />
-          </Field>
-          <Field label={t.settings.weddingRate}>
-            <input type="number" inputMode="decimal" min="0" value={draft.weddingRate} onChange={(e) => setDraft({ ...draft, weddingRate: Number(e.target.value) || 0 })} className="input-field tabular-nums" />
-          </Field>
-          <Field label={t.settings.hourlyName}>
-            <input type="text" value={draft.hourlyName} onChange={(e) => setDraft({ ...draft, hourlyName: e.target.value })} className="input-field" />
-          </Field>
-          <Field label={t.settings.hourlyRate}>
-            <input type="number" inputMode="decimal" min="0" value={draft.hourlyRate} onChange={(e) => setDraft({ ...draft, hourlyRate: Number(e.target.value) || 0 })} className="input-field tabular-nums" />
-          </Field>
+          {hasJob(draft, 'wedding') && (
+            <>
+              <Field label={draft.jobs === 'both' ? t.settings.weddingName : t.settings.jobNameSingle}>
+                <input type="text" value={draft.weddingName} onChange={(e) => setDraft({ ...draft, weddingName: e.target.value })} className="input-field" />
+              </Field>
+              <Field label={t.settings.weddingRate}>
+                <input type="number" inputMode="decimal" min="0" value={draft.weddingRate} onChange={(e) => setDraft({ ...draft, weddingRate: Number(e.target.value) || 0 })} className="input-field tabular-nums" />
+              </Field>
+            </>
+          )}
+          {hasJob(draft, 'hourly') && (
+            <>
+              <Field label={draft.jobs === 'both' ? t.settings.hourlyName : t.settings.jobNameSingle}>
+                <input type="text" value={draft.hourlyName} onChange={(e) => setDraft({ ...draft, hourlyName: e.target.value })} className="input-field" />
+              </Field>
+              <Field label={t.settings.hourlyRate}>
+                <input type="number" inputMode="decimal" min="0" value={draft.hourlyRate} onChange={(e) => setDraft({ ...draft, hourlyRate: Number(e.target.value) || 0 })} className="input-field tabular-nums" />
+              </Field>
+            </>
+          )}
         </div>
       </section>
 
-      {/* Payroll calculation parameters (v2.1) */}
+      {/* Payroll calculation parameters (v2.1) — hourly job only */}
+      {hasJob(draft, 'hourly') && (
       <section className="tile p-5 space-y-4">
         <div>
           <div className="label">תנאי עבודה — שעתי</div>
@@ -176,7 +202,7 @@ export default function Settings() {
 
           <Field label="פנסיה — אחוז עובד (%)">
             <input type="number" inputMode="decimal" min="0" step="0.1" value={(draft.pensionRate * 100).toFixed(1)} onChange={(e) => setDraft({ ...draft, pensionRate: (Number(e.target.value) || 0) / 100 })} className="input-field tabular-nums" />
-            <div className="text-[11px] text-muted mt-1 px-1">לפי החוזה: 6% (חדש: 5.5%)</div>
+            <div className="text-[11px] text-muted mt-1 px-1">חלק העובד לפי החוק: 6%</div>
           </Field>
 
           <label className="flex items-center justify-between gap-3 cursor-pointer py-2">
@@ -205,15 +231,23 @@ export default function Settings() {
 
           <Field label="מס הכנסה (%)">
             <input type="number" inputMode="decimal" min="0" step="0.1" value={(draft.incomeTaxRate * 100).toFixed(1)} onChange={(e) => setDraft({ ...draft, incomeTaxRate: (Number(e.target.value) || 0) / 100 })} className="input-field tabular-nums" />
-            <div className="text-[11px] text-muted mt-1 px-1">בד״כ 0% לסטודנט (נקודות זיכוי מכסות)</div>
+            <div className="text-[11px] text-muted mt-1 px-1">בהכנסה נמוכה לרוב 0% (נקודות זיכוי). כדאי לבדוק מול התלוש</div>
           </Field>
         </div>
+      </section>
+      )}
 
-        <div className="flex gap-2 pt-1">
+      {/* Save — outside the job sections so every worker has it */}
+      <section className="space-y-2 px-1">
+        <div className="flex gap-2">
           <button disabled={!isDirty} onClick={handleSave} className="btn-primary flex-1">{t.settings.saveSettings}</button>
           {isDirty && <button onClick={() => setDraft(settings)} className="btn-secondary">{t.form.cancel}</button>}
         </div>
-        <button onClick={() => setDraft(DEFAULT_SETTINGS)} className="text-xs text-muted hover:text-ink transition">
+        <button
+          // Resets rates and payroll parameters; the job choice and setup state stay.
+          onClick={() => setDraft({ ...DEFAULT_SETTINGS, jobs: draft.jobs, onboarded: draft.onboarded })}
+          className="text-xs text-muted hover:text-ink transition"
+        >
           איפוס לברירת מחדל
         </button>
       </section>

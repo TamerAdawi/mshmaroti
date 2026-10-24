@@ -1,6 +1,15 @@
 import { supabase } from './supabase'
 
+/** Which job(s) a worker has. Drives which screens, tiles and fields the app shows. */
+export type Jobs = 'wedding' | 'hourly' | 'both'
+
 export interface Settings {
+  // Who this worker is (v2.7)
+  /** The job(s) this worker has. */
+  jobs: Jobs
+  /** False until the first-time setup page has been completed. */
+  onboarded: boolean
+
   // Names + rates (v2.0)
   weddingRate: number
   hourlyRate: number
@@ -10,7 +19,7 @@ export interface Settings {
   // Restaurant calculation (v2.1)
   weeklyHoursMax: number          // 42 (Israeli private sector standard)
   restDayOfWeek: number           // 0=Sunday, 1=Monday, ..., 6=Saturday
-  dailyHoursThreshold: number     // 8 (per Venaro contract)
+  dailyHoursThreshold: number     // 8 (Israeli labour law)
   /**
    * Base rate paid inside the rest-day window, as a multiplier of hourlyRate.
    * 1.5 = 150% (the legal minimum). Overtime stacks on top of it: an OT hour
@@ -24,19 +33,25 @@ export interface Settings {
    */
   travelPerShift: number          // ₪ per shift
   bituachRate: number             // 0.0427 (4.27% for low income bracket)
-  pensionRate: number             // 0.06 (6% employee portion per Venaro contract)
+  pensionRate: number             // 0.06 (6% employee portion)
   pensionActive: boolean          // false until 6 months from start
   incomeTaxRate: number           // 0 (typically 0% for student income)
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  // Defaults describe the app's long-standing behaviour (both jobs, already set
+  // up), so a load failure or a database without migration_v2.7 never traps
+  // anyone on the setup page. A brand-new account is detected separately.
+  jobs: 'both',
+  onboarded: true,
+
   weddingRate: 200,
   hourlyRate: 35,
   weddingName: 'אולם אירועים',
   hourlyName: 'שעתי',
 
   weeklyHoursMax: 42,
-  restDayOfWeek: 0,           // Sunday — Tamer's contractually designated rest day
+  restDayOfWeek: 0,           // Sunday
   dailyHoursThreshold: 8,
   restDayMultiplier: 1.5,     // 150% — the legal minimum for rest-day hours
   travelPerShift: 12,         // round-trip fare; set it to your actual cost
@@ -62,7 +77,8 @@ export async function fetchSettings(): Promise<Settings> {
     console.error('Failed to load settings:', error)
     return { ...DEFAULT_SETTINGS }
   }
-  if (!data) return { ...DEFAULT_SETTINGS }
+  // No row yet means a brand-new account: send it through setup.
+  if (!data) return { ...DEFAULT_SETTINGS, onboarded: false }
   return {
     weddingRate: Number(data.wedding_rate),
     hourlyRate: Number(data.hourly_rate),
@@ -76,6 +92,9 @@ export async function fetchSettings(): Promise<Settings> {
     restDayMultiplier: data.rest_day_multiplier != null ? Number(data.rest_day_multiplier) : DEFAULT_SETTINGS.restDayMultiplier,
     // v2.6 field
     travelPerShift: data.travel_per_shift != null ? Number(data.travel_per_shift) : DEFAULT_SETTINGS.travelPerShift,
+    // v2.7 fields — absent columns mean an older database: keep the old behaviour
+    jobs: isJobs(data.jobs) ? data.jobs : DEFAULT_SETTINGS.jobs,
+    onboarded: typeof data.onboarded === 'boolean' ? data.onboarded : DEFAULT_SETTINGS.onboarded,
     bituachRate: data.bituach_rate != null ? Number(data.bituach_rate) : DEFAULT_SETTINGS.bituachRate,
     pensionRate: data.pension_rate != null ? Number(data.pension_rate) : DEFAULT_SETTINGS.pensionRate,
     pensionActive: data.pension_active ?? DEFAULT_SETTINGS.pensionActive,
@@ -97,6 +116,8 @@ export async function saveSettings(s: Settings): Promise<void> {
     daily_hours_threshold: s.dailyHoursThreshold,
     rest_day_multiplier: s.restDayMultiplier,
     travel_per_shift: s.travelPerShift,
+    jobs: s.jobs,
+    onboarded: s.onboarded,
     bituach_rate: s.bituachRate,
     pension_rate: s.pensionRate,
     pension_active: s.pensionActive,
@@ -121,7 +142,16 @@ export async function saveSettings(s: Settings): Promise<void> {
 }
 
 /** Columns added by later migrations that a database may not have yet. */
-const OPTIONAL_SETTINGS_COLUMNS = ['rest_day_multiplier', 'travel_per_shift'] as const
+const OPTIONAL_SETTINGS_COLUMNS = ['rest_day_multiplier', 'travel_per_shift', 'jobs', 'onboarded'] as const
+
+function isJobs(v: unknown): v is Jobs {
+  return v === 'wedding' || v === 'hourly' || v === 'both'
+}
+
+/** Whether this worker has each job. */
+export function hasJob(settings: Pick<Settings, 'jobs'>, job: 'wedding' | 'hourly'): boolean {
+  return settings.jobs === 'both' || settings.jobs === job
+}
 
 /**
  * True when a write failed only because `column` doesn't exist yet.

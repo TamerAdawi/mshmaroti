@@ -13,6 +13,8 @@ import type { Shift } from '../types'
 const RATE = 35
 
 const S: Settings = {
+  jobs: 'both',
+  onboarded: true,
   weddingRate: 200,
   hourlyRate: RATE,
   weddingName: 'אולם',

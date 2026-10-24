@@ -66,12 +66,14 @@ export default function History({ onEdit }: { onEdit: (s: Shift) => void }) {
         </button>
       </div>
 
-      {/* Job filter */}
+      {/* Job filter — only useful with two jobs */}
+      {settings.jobs === 'both' && (
       <div className="flex gap-2 mb-4">
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label={t.history.filterAll} />
         <FilterChip active={filter === 'wedding'} onClick={() => setFilter('wedding')} label={settings.weddingName} />
         <FilterChip active={filter === 'hourly'} onClick={() => setFilter('hourly')} label={settings.hourlyName} />
       </div>
+      )}
 
       {/* Calendar heatmap */}
       <MonthCalendar
@@ -101,7 +103,9 @@ export default function History({ onEdit }: { onEdit: (s: Shift) => void }) {
                 <button onClick={() => onEdit(s)} className="flex-1 min-w-0 text-right transition active:scale-[0.99]">
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <span className="text-sm text-muted tabular-nums shrink-0">{fmtDateShort(s.date)}</span>
-                    <span className={cn('chip px-2 py-0.5 text-[10px]', jobChipClass)}>{jobName}</span>
+                    {(settings.jobs === 'both' || s.jobType !== settings.jobs) && (
+                      <span className={cn('chip px-2 py-0.5 text-[10px]', jobChipClass)}>{jobName}</span>
+                    )}
                   </div>
                   <div className="text-xs text-body flex items-center gap-2 flex-wrap">
                     <span className="text-muted">

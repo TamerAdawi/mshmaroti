@@ -23,7 +23,8 @@ export default function TrendTile({ shifts }: { shifts: Shift[] }) {
             </div>
             <span className="label">{t.tile.trend}</span>
           </div>
-          {hasData && (
+          {/* Legend only with two jobs; both bar series always render, so no data is hidden. */}
+          {hasData && settings.jobs === 'both' && (
             <div className="flex items-center gap-2 text-[11px] text-body">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-sm" style={{ background: '#606c38' }} />

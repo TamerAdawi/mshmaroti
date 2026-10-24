@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAllShifts } from '../hooks/useShifts'
 import { useSettings } from '../hooks/useSettings'
 import { t } from '../strings'
@@ -31,6 +31,10 @@ export default function Report() {
   const [settings] = useSettings()
   const [offset, setOffset] = useState(0)
   const [job, setJob] = useState<'all' | 'wedding' | 'hourly'>('all')
+  // A worker with one job always reports on that job; the selector is hidden.
+  useEffect(() => {
+    if (settings.jobs !== 'both') setJob(settings.jobs)
+  }, [settings.jobs])
   const [opts, setOpts] = useState<Omit<ReportOptions, 'monthOffset' | 'job'>>({
     includeSummary: true,
     includeJobBreakdown: true,
@@ -83,7 +87,8 @@ export default function Report() {
         <p className="text-xs text-muted mt-1">{t.report.subtitle}</p>
       </div>
 
-      {/* Job selector — separate report per job */}
+      {/* Job selector — separate report per job (two-job workers only) */}
+      {settings.jobs === 'both' && (
       <section className="tile p-5">
         <div className="label mb-3">{t.report.selectJob}</div>
         <div className="grid grid-cols-3 gap-2">
@@ -92,6 +97,7 @@ export default function Report() {
           <JobBtn active={job === 'hourly'} onClick={() => setJob('hourly')} label={settings.hourlyName} />
         </div>
       </section>
+      )}
 
       {/* Month picker */}
       <section className="tile p-5">

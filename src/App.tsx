@@ -12,6 +12,8 @@ import NewShift from './components/NewShift'
 import History from './components/History'
 import Report from './components/Report'
 import Settings from './components/Settings'
+import Onboarding from './components/Onboarding'
+import { useSettings } from './hooks/useSettings'
 import type { Shift } from './types'
 
 type Tab = 'dashboard' | 'new' | 'history' | 'report' | 'settings'
@@ -35,17 +37,32 @@ function AuthGate() {
 
   if (demo) return <AppShell demo />
 
-  if (loading) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <Logo className="w-16 h-16 shadow-glow animate-pulse" />
-      </div>
-    )
-  }
+  if (loading) return <Splash />
 
   if (!session) return <AuthScreen />
 
+  return <SignedIn />
+}
+
+/** Signed in: first-time setup until it's done, then the app. */
+function SignedIn() {
+  const [settings, update, loaded] = useSettings()
+
+  // Decide only on real settings — never on the defaults shown while loading,
+  // or a new worker would glimpse the app and an existing one the setup page.
+  if (!loaded) return <Splash />
+  if (!settings.onboarded) {
+    return <Onboarding settings={settings} onSave={(next) => update(next, { optimistic: false })} />
+  }
   return <AppShell />
+}
+
+function Splash() {
+  return (
+    <div className="min-h-dvh flex items-center justify-center">
+      <Logo className="w-16 h-16 shadow-glow animate-pulse" />
+    </div>
+  )
 }
 
 function AppShell({ demo = false }: { demo?: boolean }) {

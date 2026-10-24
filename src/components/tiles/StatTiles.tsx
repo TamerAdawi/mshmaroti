@@ -83,7 +83,7 @@ export function MonthTile({ shifts }: { shifts: Shift[] }) {
             </span>
           )}
         </div>
-        {(income.wedding > 0 || income.hourly > 0) && (
+        {settings.jobs === 'both' && (income.wedding > 0 || income.hourly > 0) && (
           <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
             {income.wedding > 0 && (
               <span className="chip chip-indigo px-2 py-0.5 tabular-nums text-[10px]">

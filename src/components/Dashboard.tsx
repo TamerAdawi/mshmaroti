@@ -1,4 +1,5 @@
 import { useAllShifts } from '../hooks/useShifts'
+import { useSettings } from '../hooks/useSettings'
 import TodayTile from './tiles/TodayTile'
 import { WeekTile, MonthTile } from './tiles/StatTiles'
 import SplitTile from './tiles/SplitTile'
@@ -13,6 +14,10 @@ import { cn } from '../lib/utils'
 
 export default function Dashboard({ onNew, onEdit }: { onNew: () => void; onEdit: (s: Shift) => void }) {
   const shifts = useAllShifts()
+  const [settings] = useSettings()
+  // "Which job pays more", the job split and hours-per-job only mean something
+  // with two jobs to compare.
+  const twoJobs = settings.jobs === 'both'
 
   if (!shifts) return <SkeletonGrid />
 
@@ -20,7 +25,7 @@ export default function Dashboard({ onNew, onEdit }: { onNew: () => void; onEdit
     return (
       <div className="mx-auto max-w-2xl mt-10 tile-hero p-8 text-center animate-fade-up">
         <div className="num-display text-4xl text-white mb-3">שלום</div>
-        <p className="text-white/90 mb-6">טרם הוזנו משמרות. הוסף את המשמרת הראשונה כדי להתחיל.</p>
+        <p className="text-white/90 mb-6">טרם הוזנו משמרות. אפשר להוסיף את המשמרת הראשונה כדי להתחיל.</p>
         <button onClick={onNew} className="inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold bg-white text-indigo-deep active:scale-[0.98] transition shadow-lg">
           <span className="text-xl leading-none">＋</span>
           {t.nav.new}
@@ -42,15 +47,19 @@ export default function Dashboard({ onNew, onEdit }: { onNew: () => void; onEdit
       <BentoItem index={2} className="col-span-1 sm:col-span-2">
         <MonthTile shifts={shifts} />
       </BentoItem>
-      <BentoItem index={3} className="col-span-2">
-        <EffectiveRateTile shifts={shifts} />
-      </BentoItem>
-      <BentoItem index={4} className="col-span-2">
-        <SplitTile shifts={shifts} />
-      </BentoItem>
-      <BentoItem index={5} className="col-span-2">
-        <HoursByJobTile shifts={shifts} />
-      </BentoItem>
+      {twoJobs && (
+        <>
+          <BentoItem index={3} className="col-span-2">
+            <EffectiveRateTile shifts={shifts} />
+          </BentoItem>
+          <BentoItem index={4} className="col-span-2">
+            <SplitTile shifts={shifts} />
+          </BentoItem>
+          <BentoItem index={5} className="col-span-2">
+            <HoursByJobTile shifts={shifts} />
+          </BentoItem>
+        </>
+      )}
       <BentoItem index={6} className="col-span-2">
         <GrossNetTile shifts={shifts} />
       </BentoItem>
